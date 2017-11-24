@@ -10,21 +10,19 @@ exports.helloWorld = functions.https.onRequest((request, response) => {
     response.send("Hello from Hiroyuk Tamura!");
 });
 
-exports.backUp = functions.https.onRequest((request, response) => {
-    // if (req.method === 'PUT') {
-    //     res.status(403).send('Forbidden!');
-    // }
-    //
-    // if(req.method !== 'POST'){
-    //     res.status(404).send('Not Found');
-    // }
+exports.writeCommand = functions.database.ref('/writeTask/{commandId}')
+    .onWrite(event => {
+        //削除動作であればreturn
+        if (!event.data.exists()) {
+            return;
+        }
+        //
+        const commandVal =  event.data.child('command').val();
+        const url = event.data.child('url').val();
+        const writerUid = event.data.child('writerUid').val();
+        const value = event.data.child('value').val();
 
-    if(request.body.pw !== pw){
-        res.status(404).send('Not Found');
-    } else {
-        response.send(request.body.pw);
-        admin.database().ref('/accept').then(snapshot => {
-            res.redirect(303, snapshot.ref);
-        })
-    }
+        admin.database().ref('/log').set(commandVal + url + writerUid + value);
+        // console.log(commandVal);
 });
+
