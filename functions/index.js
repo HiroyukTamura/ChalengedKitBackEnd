@@ -1,3 +1,5 @@
+'use strict';
+
 const functions = require('firebase-functions');
 const pw = 'ss954a0120777777';
 const admin = require('firebase-admin');
@@ -91,7 +93,7 @@ exports.writeCommand = functions.database.ref('/writeTask/{commandId}')
 
 exports.updateGroupName = functions.database.ref('/group/{groupKey}/groupName')
     .onUpdate(event => {
-        event.data.ref.parent.child('member')
+        return event.data.ref.parent.child('member')
             .once('value')
             .then(function(snapshot){
                 snapshot.forEach(function(child) {
@@ -99,24 +101,69 @@ exports.updateGroupName = functions.database.ref('/group/{groupKey}/groupName')
                         .child("userData").child(child.key).child('group').child(event.params.groupKey).child("name")
                         .set(event.data.val());
                 });
-
-                return admin.database().ref('/log').set("ここまで走った。");
         });
+});
+
+exports.updatePhotoUrl = functions.database.ref("/group/{groupKey}/photoUrl")
+    .onUpdate(event => {
+        return event.data.ref.parent.child('member')
+            .once('value')
+            .then(function(snapshot){
+                snapshot.forEach(function(child) {
+                    event.data.ref.root
+                        .child("userData").child(child.key).child('group').child(event.params.groupKey).child("photoUrl")
+                        .set(event.data.val());
+                });
+            });
 });
 
 exports.onCreateAccount = functions.auth.user()
     .onCreate(event => {
         const uid = event.data.uid;
+        const photoUrl = setWhenNull(event.data.photoUrl);
+        const email = setWhenNull(event.data.email);
+        const displayName = setWhenNull(event.data.displayName);
         const date = moment().format("YYYYMMDD");
 
-        admin.database().ref().child(userData).child(uid).child("registeredDate").set(date);
+        //これってまとめられるんすか？
+        admin.database().ref().child("userData").child(uid).child("registeredDate").set(date);
         admin.database().ref().child("userData").child(uid).child("template").set(DEFAULT);
-        admin.database().ref().child("userData").child(uid).child("group").set(DEFAULT);
-        admin.database().ref().child("userData").child(uid).child("group").set(DEFAULT);
+        admin.database().ref().child("userData").child(uid).child("group").child(DEFAULT).set(DEFAULT);
         admin.database().ref().child("friend").child(uid).child(DEFAULT).child("name").set(DEFAULT);
         admin.database().ref().child("friend").child(uid).child(DEFAULT).child("photoUrl").set(DEFAULT);
-        admin.database().ref().child("usersParam").child(uid).set(DEFAULT);
+        admin.database().ref().child("usersParam").child(uid).child(DEFAULT).set(DEFAULT);
+
+        admin.database().ref().child("userData").child(uid).set({
+            "photoUrl": photoUrl,
+            "email": email,
+            "displayName": displayName
+        });
+        return;
 });
+
+// "userData", user.getUid(), "displayName")
+exports.onPrefKeyUpdate = functions.database.ref("/userData/{userUid}/displayName")
+    .onUpdate(event => {
+        return event.data.ref.root.child("friend").child(event.params.userUid)
+            .once("value")
+            .then(function(snapshot){
+                snapshot.forEach(function(child) {
+                    admin.database().ref('/log').set(child.key);
+                    if(child.key !== DEFAULT){
+                        event.data.ref.root
+                            .child("friend").child(child.key).child(event.params.userUid).child("name")
+                            .set(event.data.val());
+                    }
+                });
+            });
+})
+
+function setWhenNull(string){
+    if(!string)
+        return "null";
+    else
+        return string;
+}
 
 
 
