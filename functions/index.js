@@ -142,12 +142,17 @@ exports.onCreateAccount = functions.auth.user()
 });
 
 // "userData", user.getUid(), "displayName")
-exports.onPrefKeyUpdate = functions.database.ref("/userData/{userUid}/displayName")
+/**
+ * プロフィールの名前更新時に発火。主な機能は、
+ * 1.friendノードから友達のuidを検索→各友達の友人データ上書き
+ * 2.自分が参加しているグループを検索→メンバー、「○○さんの記録」の部分を上書き
+ */
+exports.onPrefNameUpdate = functions.database.ref("/userData/{userUid}/displayName")
     .onUpdate(event => {
 
-        const newMyName = event.data.val();
-        const myUid = event.params.userUid;
-        const rootRef = event.data.ref.root;
+        let newMyName = event.data.val();
+        let myUid = event.params.userUid;
+        let rootRef = event.data.ref.root;
 
         return rootRef.child("friend").child(myUid)
             .once("value")
@@ -192,6 +197,53 @@ exports.onPrefKeyUpdate = functions.database.ref("/userData/{userUid}/displayNam
                         });
                     });
             });
+});
+
+/**
+ *
+ * 1.friendノードから友達のuidを検索→各友達の友人データ上書き
+ * 2.自分が参加しているグループを検索→メンバーノードを上書き
+ */
+exports.onPrefPhotoUrlUpdate = functions.database.ref("/userData/{userUid}/photoUrl")
+    .onUpdate(event => {
+
+    let newMyPhotoUrl = event.data.val();
+    let myUid = event.params.userUid;
+    let rootRef = event.data.ref.root;
+
+    return rootRef.child("friend").child(myUid)
+        .once("value")
+        .then(function(snapshot){
+
+            snapshot.forEach(function(child) {
+                if(child.key !== DEFAULT){
+                    rootRef.child("friend").child(child.key).child(myUid).child("photoUrl")
+                        .set(event.data.val());
+                }
+            });
+
+            event.data.ref.parent.child("group")
+                .once("value")
+                .then(function(snapshot){
+                    snapshot.forEach(function (child) {
+                        const groupKey = child.key;
+                        if(groupKey !== DEFAULT){
+                            //groupKey基づいて、各groupNodeを見ていく
+                            rootRef.child("group").child(groupKey)
+                                .once("value")
+                                .then(function(snapShotGroup){
+                                    if(snapShotGroup.hasChild("member")){
+                                        snapShotGroup.child("member").forEach(function (snapMember) {
+                                            if(snapMember.key === myUid){
+                                                snapMember.child("photoUrl").ref.set(newMyPhotoUrl);
+                                            }
+                                        })
+                                    }
+                                });
+                        }
+                    });
+                });
+        });
 });
 
 function setWhenNull(string){
