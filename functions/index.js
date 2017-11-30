@@ -144,19 +144,55 @@ exports.onCreateAccount = functions.auth.user()
 // "userData", user.getUid(), "displayName")
 exports.onPrefKeyUpdate = functions.database.ref("/userData/{userUid}/displayName")
     .onUpdate(event => {
-        return event.data.ref.root.child("friend").child(event.params.userUid)
+
+        const newMyName = event.data.val();
+        const myUid = event.params.userUid;
+        const rootRef = event.data.ref.root;
+
+        return rootRef.child("friend").child(myUid)
             .once("value")
             .then(function(snapshot){
+
                 snapshot.forEach(function(child) {
-                    admin.database().ref('/log').set(child.key);
                     if(child.key !== DEFAULT){
                         event.data.ref.root
-                            .child("friend").child(child.key).child(event.params.userUid).child("name")
+                            .child("friend").child(child.key).child(myUid).child("name")
                             .set(event.data.val());
                     }
                 });
+
+                event.data.ref.parent.child("group")
+                    .once("value")
+                    .then(function(snapshot){
+                        snapshot.forEach(function (child) {
+                            const groupKey = child.key;
+                            if(groupKey !== DEFAULT){
+                                //groupKey基づいて、各groupNodeを見ていく
+                                rootRef.child("group").child(groupKey)
+                                    .once("value")
+                                    .then(function(snapShotGroup){
+                                        if(snapShotGroup.hasChild("contents")){
+                                            snapShotGroup.child("contents").forEach(function (snapContents) {
+                                                if(snapContents.child("type").val() === "data"){
+                                                    const string = newMyName + "さんの記録";
+                                                    snapContents.child("contentName").ref.set(string);
+                                                }
+                                            });
+                                        }
+
+                                        if(snapShotGroup.hasChild("member")){
+                                            snapShotGroup.child("member").forEach(function (snapMember) {
+                                                if(snapMember.key === myUid){
+                                                    snapMember.child("name").ref.set(newMyName);
+                                                }
+                                            })
+                                        }
+                                    });
+                            }
+                        });
+                    });
             });
-})
+});
 
 function setWhenNull(string){
     if(!string)
