@@ -303,13 +303,12 @@ exports.onGroupMemberDiscourage = functions.database.ref("/group/{groupKey}/memb
 /**
  * グループ招待時に動作する。
  * writeTask/{commandId}ノードでコマンドを受け付ける。
- * code: ADD_GROUP_NEW_USER
+ * code: INVITE_GROUP
  *  コマンドからgroupKey, 招待する者のuid（複数可）をパラメータとして受け取る。
  *  →まずグループ名、グループアイコンの値を取得
  *  →次に各ユーザのアイコン・ユーザ名を取得し、groupのmember、及び各ユーザのuserDataのgroupノードに書き込みを行う。
  */
-exports.onAddedGroup = functions.database.ref('writeTask/{commandId}').onCreate(event => {
-    let userUid = event.params.userUid;
+exports.writeTask = functions.database.ref('writeTask/{commandId}').onCreate(event => {
     let rootRef = event.data.ref.root;
 
     if (!event.data.hasChild('code')) {
@@ -317,9 +316,10 @@ exports.onAddedGroup = functions.database.ref('writeTask/{commandId}').onCreate(
         return null;
     }
 
-    switch (event.data.child('code').val()) {
-        case 'ADD_GROUP_NEW_USER':
-            if (!checkHasChild(event.data, ['keys', 'groupKey'], 'ADD_GROUP_NEW_USER'))
+    var command = event.data.child('code').val();
+    switch (command) {
+        case 'INVITE_GROUP':
+            if (!checkHasChild(event.data, ['keys', 'groupKey'], 'INVITE_GROUP'))
                 return null;
 
             var keys = event.data.child('keys').val().split('_');
@@ -327,14 +327,14 @@ exports.onAddedGroup = functions.database.ref('writeTask/{commandId}').onCreate(
 
             return rootRef.child('group').child(groupKeyE).once('value').then(function (snapshot) {
 
-                if(!checkHasChild(snapshot, ['groupName', 'photoUrl'], 'ADD_GROUP_NEW_USER'))
+                if(!checkHasChild(snapshot, ['groupName', 'photoUrl'], 'INVITE_GROUP'))
                     return false;
 
                 var groupName = snapshot.child('groupName').val();
                 var groupPhotoUrl = snapshot.child('photoUrl').val();
 
                 return rootRef.child('userData').once('value').then(function (snapshot) {
-                    if (!checkHasChild(snapshot, keys, 'ADD_GROUP_NEW_USER'))
+                    if (!checkHasChild(snapshot, keys, 'INVITE_GROUP'))
                         return;
 
                     var update ={};
@@ -359,17 +359,17 @@ exports.onAddedGroup = functions.database.ref('writeTask/{commandId}').onCreate(
                 });
             });
         case 'ADD_FRIEND':
-            if (!checkHasChild(event.data, ['key', 'targetUserKey'], 'ADD_GROUP_NEW_USER'))
+            if (!checkHasChild(event.data, ['key', 'targetUserKey'], 'ADD_FRIEND'))
                 return null;
             var key = event.data.child('key').val();
             var targetUserKey = event.data.child('targetUserKey').val();
 
             return rootRef.child('userData').once('value').then(function (snapshot) {
-                if(!checkHasChild(snapshot, [key, targetUserKey], 'ADD_GROUP_NEW_USER'))
+                if(!checkHasChild(snapshot, [key, targetUserKey], 'ADD_FRIEND'))
                     return null;
 
-                if (!checkHasChild(snapshot.child(key), ['displayName', 'photoUrl'], 'ADD_GROUP_NEW_USER')
-                        || !checkHasChild(snapshot.child(targetUserKey), ['displayName', 'photoUrl'], 'ADD_GROUP_NEW_USER')) {
+                if (!checkHasChild(snapshot.child(key), ['displayName', 'photoUrl'], 'ADD_FRIEND')
+                        || !checkHasChild(snapshot.child(targetUserKey), ['displayName', 'photoUrl'], 'ADD_FRIEND')) {
                     return null;
                 }
 
@@ -387,8 +387,25 @@ exports.onAddedGroup = functions.database.ref('writeTask/{commandId}').onCreate(
                     console.log(reason);
                 });
             });
+        case 'ADD_GROUP_AS_INVITED':
+            if (!checkHasChild(event.data, ['whose', 'groupKey'], 'ADD_GROUP_AS_INVITED'))
+                return null;
+
+            console.log('ここｆこ');
+            var groupKeyF = event.data.child('groupKey').val();
+            var userUid = event.data.child('whose').val();
+
+            var updates = {};
+            updates['group/'+ groupKeyF +'/member/'+ userUid +'/isChecked'] = true;
+            updates['userData/'+ userUid + '/group/'+ groupKeyF + '/added'] = true;
+            return rootRef.update(updates).then(function (value) {
+                console.log('ADD_GROUP_AS_INVITED 成功! userUid: '+ userUid +' groupKey: '+ groupKeyF);
+            }).catch(function (reason) {
+                console.log(reason);
+            });
         default:
-            break;
+            console.log('!waring! invalid command: ' + command);
+            return null;
     }
 });
 
@@ -414,13 +431,6 @@ function checkHasChild(data, params, methodName){
     });
 
     return hasChild;
-}
-
-/**
- * @param node ノード名を格納した配列。
- */
-function makeScheme(node) {
-    return node.join('/');
 }
 
 
