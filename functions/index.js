@@ -419,6 +419,15 @@ exports.writeTask = functions.database.ref('writeTask/{commandId}').onCreate(eve
                 console.log(reason);
             });
 
+        case 'CREATE_GROUP':
+            if (!checkHasChild(event.data, ['groupName', 'keys'], command))
+                return null;
+
+            var groupName = event.data.child('groupName');
+            var keys = event.data.child('keys');
+
+            var updatesH = {}
+            //todo 次ここから
         default:
             console.log('!waring! invalid command: ' + command);
             return null;
