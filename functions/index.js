@@ -251,7 +251,6 @@ exports.onPrefPhotoUrlUpdate = functions.database.ref("/userData/{userUid}/photo
  * @param string
  * @returns {*}
  */
-
 exports.onGroupMemberDiscourage = functions.database.ref("/group/{groupKey}/member/{userUid}")
     .onDelete(event => {
         let userUid = event.params.userUid;
@@ -375,12 +374,14 @@ exports.onAddedGroup = functions.database.ref('writeTask/{commandId}').onCreate(
                 }
 
                 var updates = {};
-                updates[key][targetUserKey]['name'] = snapshot.child(targetUserKey).child('displayName').val();
-                updates[key][targetUserKey]['photoUrl'] = snapshot.child(targetUserKey).child('photoUrl').val();
-                updates[targetUserKey][key]['name'] = snapshot.child(key).child('displayName').val();
-                updates[targetUserKey][key]['photoUrl'] = snapshot.child(key).child('photoUrl').val();
+                updates[key +'/'+ targetUserKey +'/name'] = snapshot.child(targetUserKey).child('displayName').val();
+                updates[key +'/'+ targetUserKey +'/photoUrl'] = snapshot.child(targetUserKey).child('photoUrl').val();
+                updates[key +'/'+ targetUserKey +'/isChecked'] = false;
+                updates[targetUserKey +'/'+ key +'/name'] = snapshot.child(key).child('displayName').val();
+                updates[targetUserKey +'/'+ key +'/photoUrl'] = snapshot.child(key).child('photoUrl').val();
+                updates[targetUserKey +'/'+ key +'/isChecked'] = false;
 
-                return rootRef.child('friend').set(updates).then(function () {
+                return rootRef.child('friend').update(updates).then(function () {
                     console.log('ADD_FRIEND 成功！key: '+ key +' targetUserKey: '+ targetUserKey);
                 }).catch(function (reason) {
                     console.log(reason);
@@ -413,6 +414,13 @@ function checkHasChild(data, params, methodName){
     });
 
     return hasChild;
+}
+
+/**
+ * @param node ノード名を格納した配列。
+ */
+function makeScheme(node) {
+    return node.join('/');
 }
 
 
