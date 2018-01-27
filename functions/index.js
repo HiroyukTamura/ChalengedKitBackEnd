@@ -301,6 +301,14 @@ exports.onGroupMemberDiscourage = functions.database.ref("/group/{groupKey}/memb
 //     }
 // });
 
+/**
+ * グループ招待時に動作する。
+ * writeTask/{commandId}ノードでコマンドを受け付ける。
+ * code: ADD_GROUP_NEW_USER
+ *  コマンドからgroupKey, 招待する者のuid（複数可）をパラメータとして受け取る。
+ *  →まずグループ名、グループアイコンの値を取得
+ *  →次に各ユーザのアイコン・ユーザ名を取得し、groupのmember、及び各ユーザのuserDataのgroupノードに書き込みを行う。
+ */
 exports.onAddedGroup = functions.database.ref('writeTask/{commandId}').onCreate(event => {
     let userUid = event.params.userUid;
     let rootRef = event.data.ref.root;
