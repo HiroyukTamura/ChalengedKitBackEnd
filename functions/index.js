@@ -303,14 +303,50 @@ exports.onGroupMemberDiscourage = functions.database.ref("/group/{groupKey}/memb
 
 exports.onAddedGroup = functions.database.ref('writeTask/{commandId}').onCreate(event => {
     let userUid = event.params.userUid;
-    let groupKey = event.params.groupKey;
     let rootRef = event.data.ref.root;
 
-    console.log('onAddedGroup code: '+ event.data.child('code').val());
-    event.data.child('params').forEach(function (param) {
-        console.log('new userKey:'+ param.val());
-    });
-    return null;
+    if (!event.data.hasChild('code')) {
+        console.log('warning! onAddedGroup() event.data.hasChild(code) === false');
+        return null;
+    }
+
+    switch (event.data.child('code').val()) {
+        case 'ADD_GROUP_NEW_USER':
+            if (!checkHasChild(event.data, ['keys', 'groupKey']), 'ADD_GROUP_NEW_USER')
+                return null;
+
+            var keys = event.data.child('keys').val().split('_');
+            var groupKeyE = event.data.child('groupKey').val();
+
+            return rootRef.child('group').child(groupKeyE).once('value').then(function (snapshot) {
+
+                if(!checkHasChild(snapshot, ['groupName', 'photoUrl']))
+                    return false;
+
+                var groupName = snapshot.child('groupName').val();
+                var groupPhotoUrl = snapshot.child('photoUrl').val();
+
+                keys.forEach(function (key) {
+                    var photoUrl = rootRef.child('userData').child(key).child('photoUrl').val();
+                    var name = rootRef.child('userData').child(key).child('displayName').val();
+
+                    update['group/' + groupKeyE + '/member/' + key + '/isChecked'] = false;//todo これはisCheckedでいいんだよな？
+                    update['group/' + groupKeyE + '/member/' + key + '/photoUrl'] = photoUrl;
+                    update['group/' + groupKeyE + '/member/+' + key + '/name'] = name;
+                    update['userData/' + key + '/group/' + groupKeyE + '/added'] = false;
+                    update['userData/' + key + '/group/' + groupKeyE + '/photoUrl'] = groupPhotoUrl;
+                    update['userData/' + key + '/group/' + groupKeyE + '/name'] = groupName;
+                });
+
+                rootRef.update(update).then(function () {
+                    console.log('onAddedGroup成功!');
+                }).catch(function (reason) {
+                    console.log(reason);
+                });
+            });
+        default:
+            break;
+    }
 });
 
 function setWhenNull(string){
@@ -318,6 +354,23 @@ function setWhenNull(string){
         return "null";
     else
         return string;
+}
+
+/**
+ * @param data event.dataで得られるdata
+ * @param params 存在を調べたいkeyを格納した配列
+ * @param methodName メソッド名
+ */
+function checkHasChild(data, params, methodName){
+    var hasChild = true;
+    params.forEach(function(param){
+        if (!data.hasChild(param)) {
+            console.log('!WARNING!'+ param + 'がdataノードに存在していない! at ' + methodName);
+            hasChild = false;
+        }
+    });
+
+    return hasChild;
 }
 
 
