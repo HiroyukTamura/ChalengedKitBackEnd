@@ -75,21 +75,21 @@ app.get('/api', (req, res) => {
 
 exports.helloWorld = functions.https.onRequest(app);
 
-exports.writeCommand = functions.database.ref('/writeTask/{commandId}')
-    .onWrite(event => {
-        //削除動作であればreturn
-        if (!event.data.exists()) {
-            return;
-        }
-        //
-        const commandVal =  event.data.child('command').val();
-        const url = event.data.child('url').val();
-        const writerUid = event.data.child('writerUid').val();
-        const value = event.data.child('value').val();
-
-        admin.database().ref('/log').set(commandVal + url + writerUid + value);
-        // console.log(commandVal);
-});
+// exports.writeCommand = functions.database.ref('/writeTask/{commandId}')
+//     .onWrite(event => {
+//         //削除動作であればreturn
+//         if (!event.data.exists()) {
+//             return;
+//         }
+//         //
+//         const commandVal =  event.data.child('command').val();
+//         const url = event.data.child('url').val();
+//         const writerUid = event.data.child('writerUid').val();
+//         const value = event.data.child('value').val();
+//
+//         admin.database().ref('/log').set(commandVal + url + writerUid + value);
+//         // console.log(commandVal);
+// });
 
 exports.updateGroupName = functions.database.ref('/group/{groupKey}/groupName')
     .onUpdate(event => {
@@ -200,7 +200,7 @@ exports.onPrefNameUpdate = functions.database.ref("/userData/{userUid}/displayNa
 });
 
 /**
- *
+ * プロフィールのphotoUrlアップデート時に発火。
  * 1.friendノードから友達のuidを検索→各友達の友人データ上書き
  * 2.自分が参加しているグループを検索→メンバーノードを上書き
  */
@@ -244,6 +244,73 @@ exports.onPrefPhotoUrlUpdate = functions.database.ref("/userData/{userUid}/photo
                     });
                 });
         });
+});
+
+/**
+ * グループからメンバー退会→各userDataを更新&&体調管理を解除
+ * @param string
+ * @returns {*}
+ */
+
+exports.onGroupMemberDiscourage = functions.database.ref("/group/{groupKey}/member/{userUid}")
+    .onDelete(event => {
+        let userUid = event.params.userUid;
+        let groupKey = event.params.groupKey;
+        let rootRef = event.data.ref.root;
+        return rootRef.child("group").child(groupKey).once('value').then(function (groupNode) {
+
+            if (!groupNode.hasChild('contents'))
+                return;
+
+            groupNode.child('contents').forEach(function (snap) {
+                if (!snap.hasChild('type')) {
+                    console.log('warning!! there contents not has type! groupKey: ' + groupKey + 'contentsKey: ' + snap.key);
+                    return;
+                }
+                if (!snap.hasChild('whose')) {
+                    console.log('warning!! there contents not has whose! groupKey: ' + groupKey + 'contentsKey: ' + snap.key);
+                    return;
+                }
+                //同期中の体調管理を発見！
+                if (snap.child('type').val() === 'data' && snap.child('whose').val() === userUid) {
+                    console.log('同期中の体調管理を発見!　ユーザ退会の為削除します！');
+                    return rootRef.child('group').child(groupKey).child('contents').child(snap.key).set(null).then(function (value2) {
+                        console.log('削除成功！');
+                    }).catch(function (reason) {
+                        console.log('onGroupMemberDiscourage: ', reason.code, reason.message);
+                    });
+                }
+            });
+            // updatedMember.forEach(function(child) {
+            //     //とはいえmemberノードはDEFAULT保障されていない
+            //     if(child.key !== DEFAULT){
+            //         console.log(child.key);
+            //     }
+            // });
+        });
+});
+
+// exports.onAddedGroup = functions.database.ref('/group/{groupKey}/member/{userUid}').onCreate(event => {
+//     let userUid = event.params.userUid;
+//     let groupKey = event.params.groupKey;
+//     if(event.data.isChecked === false || event.data.isChecked === 'false') {
+//
+//     } else {
+//         console.log('warning onAddedGroup() userUid: '+ userUid +' groupKey: '+ groupKey);
+//         return '';
+//     }
+// });
+
+exports.onAddedGroup = functions.database.ref('writeTask/{commandId}').onCreate(event => {
+    let userUid = event.params.userUid;
+    let groupKey = event.params.groupKey;
+    let rootRef = event.data.ref.root;
+
+    console.log('onAddedGroup code: '+ event.data.child('code').val());
+    event.data.child('params').forEach(function (param) {
+        console.log('new userKey:'+ param.val());
+    });
+    return null;
 });
 
 function setWhenNull(string){
