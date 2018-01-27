@@ -391,18 +391,34 @@ exports.writeTask = functions.database.ref('writeTask/{commandId}').onCreate(eve
             if (!checkHasChild(event.data, ['whose', 'groupKey'], 'ADD_GROUP_AS_INVITED'))
                 return null;
 
-            console.log('ここｆこ');
             var groupKeyF = event.data.child('groupKey').val();
             var userUid = event.data.child('whose').val();
 
             var updates = {};
             updates['group/'+ groupKeyF +'/member/'+ userUid +'/isChecked'] = true;
             updates['userData/'+ userUid + '/group/'+ groupKeyF + '/added'] = true;
-            return rootRef.update(updates).then(function (value) {
+            return rootRef.update(updates).then(function () {
                 console.log('ADD_GROUP_AS_INVITED 成功! userUid: '+ userUid +' groupKey: '+ groupKeyF);
             }).catch(function (reason) {
                 console.log(reason);
             });
+
+        case 'LEAVE_GROUP':
+            if (!checkHasChild(event.data, ['whose', 'groupKey'], command))
+                return null;
+
+            var groupKeyG = event.data.child('groupKey').val();
+            var userUidG = event.data.child('whose').val();
+
+            var updatesG = {};
+            updatesG['group/'+ groupKeyG +'/member/'+ userUidG] = null;
+            updatesG['userData/'+ userUidG + '/group/'+ groupKeyG] = null;
+            return rootRef.update(updatesG).then(function () {
+                console.log('ADD_GROUP_AS_INVITED 成功! userUid: '+ updatesG +' groupKey: '+ groupKeyG);
+            }).catch(function (reason) {
+                console.log(reason);
+            });
+
         default:
             console.log('!waring! invalid command: ' + command);
             return null;
