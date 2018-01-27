@@ -328,7 +328,7 @@ exports.onAddedGroup = functions.database.ref('writeTask/{commandId}').onCreate(
 
             return rootRef.child('group').child(groupKeyE).once('value').then(function (snapshot) {
 
-                if(!checkHasChild(snapshot, ['groupName', 'photoUrl']))
+                if(!checkHasChild(snapshot, ['groupName', 'photoUrl'], 'ADD_GROUP_NEW_USER'))
                     return false;
 
                 var groupName = snapshot.child('groupName').val();
@@ -357,6 +357,33 @@ exports.onAddedGroup = functions.database.ref('writeTask/{commandId}').onCreate(
                     }).catch(function (reason) {
                         console.log(reason);
                     });
+                });
+            });
+        case 'ADD_FRIEND':
+            if (!checkHasChild(event.data, ['key', 'targetUserKey'], 'ADD_GROUP_NEW_USER'))
+                return null;
+            var key = event.data.child('key').val();
+            var targetUserKey = event.data.child('targetUserKey').val();
+
+            return rootRef.child('userData').once('value').then(function (snapshot) {
+                if(!checkHasChild(snapshot, [key, targetUserKey], 'ADD_GROUP_NEW_USER'))
+                    return null;
+
+                if (!checkHasChild(snapshot.child(key), ['displayName', 'photoUrl'], 'ADD_GROUP_NEW_USER')
+                        || !checkHasChild(snapshot.child(targetUserKey), ['displayName', 'photoUrl'], 'ADD_GROUP_NEW_USER')) {
+                    return null;
+                }
+
+                var updates = {};
+                updates[key][targetUserKey]['name'] = snapshot.child(targetUserKey).child('displayName').val();
+                updates[key][targetUserKey]['photoUrl'] = snapshot.child(targetUserKey).child('photoUrl').val();
+                updates[targetUserKey][key]['name'] = snapshot.child(key).child('displayName').val();
+                updates[targetUserKey][key]['photoUrl'] = snapshot.child(key).child('photoUrl').val();
+
+                return rootRef.child('friend').set(updates).then(function () {
+                    console.log('ADD_FRIEND 成功！key: '+ key +' targetUserKey: '+ targetUserKey);
+                }).catch(function (reason) {
+                    console.log(reason);
                 });
             });
         default:
