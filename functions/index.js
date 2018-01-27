@@ -312,7 +312,7 @@ exports.onAddedGroup = functions.database.ref('writeTask/{commandId}').onCreate(
 
     switch (event.data.child('code').val()) {
         case 'ADD_GROUP_NEW_USER':
-            if (!checkHasChild(event.data, ['keys', 'groupKey']), 'ADD_GROUP_NEW_USER')
+            if (!checkHasChild(event.data, ['keys', 'groupKey'], 'ADD_GROUP_NEW_USER'))
                 return null;
 
             var keys = event.data.child('keys').val().split('_');
@@ -326,22 +326,29 @@ exports.onAddedGroup = functions.database.ref('writeTask/{commandId}').onCreate(
                 var groupName = snapshot.child('groupName').val();
                 var groupPhotoUrl = snapshot.child('photoUrl').val();
 
-                keys.forEach(function (key) {
-                    var photoUrl = rootRef.child('userData').child(key).child('photoUrl').val();
-                    var name = rootRef.child('userData').child(key).child('displayName').val();
+                return rootRef.child('userData').once('value').then(function (snapshot) {
+                    if (!checkHasChild(snapshot, keys, 'ADD_GROUP_NEW_USER'))
+                        return;
 
-                    update['group/' + groupKeyE + '/member/' + key + '/isChecked'] = false;//todo これはisCheckedでいいんだよな？
-                    update['group/' + groupKeyE + '/member/' + key + '/photoUrl'] = photoUrl;
-                    update['group/' + groupKeyE + '/member/+' + key + '/name'] = name;
-                    update['userData/' + key + '/group/' + groupKeyE + '/added'] = false;
-                    update['userData/' + key + '/group/' + groupKeyE + '/photoUrl'] = groupPhotoUrl;
-                    update['userData/' + key + '/group/' + groupKeyE + '/name'] = groupName;
-                });
+                    var update ={};
+                    keys.forEach(function (key) {
+                        var photoUrl = snapshot.child(key).child('photoUrl').val();
+                        var name = snapshot.child(key).child('displayName').val();
+                        console.log(key, photoUrl, name);
 
-                rootRef.update(update).then(function () {
-                    console.log('onAddedGroup成功!');
-                }).catch(function (reason) {
-                    console.log(reason);
+                        update['group/' + groupKeyE + '/member/' + key + '/isChecked'] = false;//todo これはisCheckedでいいんだよな？
+                        update['group/' + groupKeyE + '/member/' + key + '/photoUrl'] = photoUrl;
+                        update['group/' + groupKeyE + '/member/' + key + '/name'] = name;
+                        update['userData/' + key + '/group/' + groupKeyE + '/added'] = false;
+                        update['userData/' + key + '/group/' + groupKeyE + '/photoUrl'] = groupPhotoUrl;
+                        update['userData/' + key + '/group/' + groupKeyE + '/name'] = groupName;
+                    });
+
+                    return rootRef.update(update).then(function () {
+                        console.log('onAddedGroup成功!');
+                    }).catch(function (reason) {
+                        console.log(reason);
+                    });
                 });
             });
         default:
