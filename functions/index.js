@@ -106,7 +106,7 @@ app.post('/searchUser', (req, res) => {
 
             let result = [];
             snapshot.forEach(function (childSnap) {
-                if(childSnap.key === DEFAULT || !checkHasChild(childSnap, ['displayName', 'photoUrl'], 'searchUser') || childSnap.key === )
+                if(childSnap.key === DEFAULT || !checkHasChild(childSnap, ['displayName', 'photoUrl'], 'searchUser'))
                     return;
 
                 let displayName = childSnap.child('displayName').val();
