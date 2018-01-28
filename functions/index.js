@@ -92,12 +92,57 @@ app.use(validateFirebaseIdToken);
 // });
 
 app.post('/searchUser', (req, res) => {
+    const NO_RESULT = 'NO_RESULT';
+    const OVER_50 = 'OVER_50';
+    const SUCCESS ='SUCCESS';
+    const OPERATION_ERROR = 'OPERATION_ERROR';
     console.log('こっち');
     if(!req.body.keyword){
         res.status(403).send('non-keyword');
     } else {
         console.log(req.body.keyword);
-        res.status(200).send(req.body.keyword);
+
+        admin.database().ref().child('userData').once('value').then((snapshot) => {
+
+            let result = [];
+            snapshot.forEach(function (childSnap) {
+                if(childSnap.key === DEFAULT || !checkHasChild(childSnap, ['displayName', 'photoUrl'], 'searchUser') || childSnap.key === )
+                    return;
+
+                let displayName = childSnap.child('displayName').val();
+                let bigDisplayName = displayName.toUpperCase();
+                let bigKeyword = req.body.keyword.toUpperCase();
+                if (bigDisplayName.indexOf(bigKeyword) === -1)
+                    return;
+
+                let photoUrl = childSnap.child('photoUrl').val();
+                let user = {
+                    displayName: displayName,
+                    photoUrl: photoUrl,
+                    uid: childSnap.key.
+                    isFriend:
+                };
+                result.push(user);
+            });
+
+            if (result.length === 0) {
+                let json = { status: NO_RESULT };
+                res.status(200).send(JSON.stringify(json));
+            } else if (snapshot.numChildren() > 50){
+                let json = { status: OVER_50 };
+                res.status(200).send(JSON.stringify(json));
+            } else {
+                let json = {
+                    status: SUCCESS,
+                    result: result
+                };
+                res.status(200).send(JSON.stringify(json));
+            }
+        }).catch((error) =>{
+            console.log(error);
+            let response = {status: OPERATION_ERROR};
+            res.status(200).send(JSON.stringify(response));
+        });
     }
 });
 
