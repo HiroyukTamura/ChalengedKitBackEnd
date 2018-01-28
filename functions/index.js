@@ -420,14 +420,54 @@ exports.writeTask = functions.database.ref('writeTask/{commandId}').onCreate(eve
             });
 
         case 'CREATE_GROUP':
-            if (!checkHasChild(event.data, ['groupName', 'keys'], command))
-                return null;
+            {
+                if (!checkHasChild(event.data, ['groupName', 'keys', 'whose', 'photoUrl'], command))
+                    return null;
 
-            var groupName = event.data.child('groupName');
-            var keys = event.data.child('keys');
+                //todo keysはwhoseを含まないことに注意してください！(json側でバリデーションしてください)
+                let groupName = event.data.child('groupName').val();
+                let keys = event.data.child('keys').val().split('_');
+                let userUid = event.data.child('whose').val();
+                let photoUrlGroup = event.data.child('photoUrl').val();
+                keys.push(userUid);
 
-            var updatesH = {}
-            //todo 次ここから
+                let updates = {};
+
+                let newGroupKey = rootRef.child('keyPusher').push().key;
+                updates['group/'+ newGroupKey +'/groupName'] = groupName;
+                updates['group/'+ newGroupKey +'/host'] = userUid;
+                updates['group/'+ newGroupKey +'/photoUrl'] = photoUrlGroup;
+
+                return rootRef.child('userData').once('value').then(function(snapshot) {
+                    if (!checkHasChild(snapshot, keys, command))
+                        return;
+
+                    keys.forEach(function (key) {
+                        if(!checkHasChild(snapshot.child(key), ['displayName', 'photoUrl'], command))
+                            return;
+
+                        let displayName = snapshot.child(key + '/displayName').val();
+                        let photoUrl = snapshot.child(key + '/photoUrl').val();
+                        let parentScheme = scheme('group', newGroupKey, 'member', key);
+                        updates[scheme(parentScheme, 'isChecked')] = key === userUid;
+                        updates[scheme(parentScheme, 'name')] = displayName;
+                        updates[scheme(parentScheme, 'photoUrl')] = photoUrl;
+
+                        let userDataScheme = scheme('userData', key, 'group', newGroupKey);
+                        updates[scheme(userDataScheme, 'added')] = key === userUid;
+                        updates[scheme(userDataScheme, 'name')] = groupName;
+                        updates[scheme(userDataScheme, 'photoUrl')] = photoUrlGroup;
+                    });
+
+                    return rootRef.update(updates).then(function () {
+
+                        console.log('成功: '+ command +'keys: '+ keys +' groupKey: '+ newGroupKey);
+
+                    }).catch(function(error){
+                        console.log(error);
+                    });
+                });
+            }
         default:
             console.log('!waring! invalid command: ' + command);
             return null;
@@ -456,6 +496,10 @@ function checkHasChild(data, params, methodName){
     });
 
     return hasChild;
+}
+
+function scheme(...nodeNames) {
+    return nodeNames.join('/');
 }
 
 
