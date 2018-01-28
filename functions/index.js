@@ -421,7 +421,7 @@ exports.writeTask = functions.database.ref('writeTask/{commandId}').onCreate(eve
 
         case 'CREATE_GROUP':
             {
-                if (!checkHasChild(event.data, ['groupName', 'keys', 'whose', 'photoUrl'], command))
+                if (!checkHasChild(event.data, ['groupName', 'keys', 'whose', 'photoUrl', 'newGroupKey'], command))
                     return null;
 
                 //todo keysはwhoseを含まないことに注意してください！(json側でバリデーションしてください)
@@ -429,11 +429,11 @@ exports.writeTask = functions.database.ref('writeTask/{commandId}').onCreate(eve
                 let keys = event.data.child('keys').val().split('_');
                 let userUid = event.data.child('whose').val();
                 let photoUrlGroup = event.data.child('photoUrl').val();
+                let newGroupKey = event.data.child('newGroupKey').val();
+
                 keys.push(userUid);
 
                 let updates = {};
-
-                let newGroupKey = rootRef.child('keyPusher').push().key;
                 updates['group/'+ newGroupKey +'/groupName'] = groupName;
                 updates['group/'+ newGroupKey +'/host'] = userUid;
                 updates['group/'+ newGroupKey +'/photoUrl'] = photoUrlGroup;
@@ -458,6 +458,9 @@ exports.writeTask = functions.database.ref('writeTask/{commandId}').onCreate(eve
                         updates[scheme(userDataScheme, 'name')] = groupName;
                         updates[scheme(userDataScheme, 'photoUrl')] = photoUrlGroup;
                     });
+
+                    let calScheme = scheme('calendar', newGroupKey, DEFAULT);
+                    updates[calScheme] = DEFAULT;
 
                     return rootRef.update(updates).then(function () {
 
