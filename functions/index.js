@@ -234,57 +234,57 @@ exports.onCreateAccount = functions.auth.user()
  * 1.friendノードから友達のuidを検索→各友達の友人データ上書き
  * 2.自分が参加しているグループを検索→メンバー、「○○さんの記録」の部分を上書き
  */
-exports.onPrefNameUpdate = functions.database.ref("/userData/{userUid}/displayName")
-    .onUpdate(event => {
-
-        let newMyName = event.data.val();
-        let myUid = event.params.userUid;
-        let rootRef = event.data.ref.root;
-
-        return rootRef.child("friend").child(myUid)
-            .once("value")
-            .then(function(snapshot){
-
-                snapshot.forEach(function(child) {
-                    if(child.key !== DEFAULT){
-                        event.data.ref.root
-                            .child("friend").child(child.key).child(myUid).child("name")
-                            .set(event.data.val());
-                    }
-                });
-
-                event.data.ref.parent.child("group")
-                    .once("value")
-                    .then(function(snapshot){
-                        snapshot.forEach(function (child) {
-                            const groupKey = child.key;
-                            if(groupKey !== DEFAULT){
-                                //groupKey基づいて、各groupNodeを見ていく
-                                rootRef.child("group").child(groupKey)
-                                    .once("value")
-                                    .then(function(snapShotGroup){
-                                        if(snapShotGroup.hasChild("contents")){
-                                            snapShotGroup.child("contents").forEach(function (snapContents) {
-                                                if(snapContents.child("type").val() === "data"){
-                                                    const string = newMyName + "さんの記録";
-                                                    snapContents.child("contentName").ref.set(string);
-                                                }
-                                            });
-                                        }
-
-                                        if(snapShotGroup.hasChild("member")){
-                                            snapShotGroup.child("member").forEach(function (snapMember) {
-                                                if(snapMember.key === myUid){
-                                                    snapMember.child("name").ref.set(newMyName);
-                                                }
-                                            })
-                                        }
-                                    });
-                            }
-                        });
-                    });
-            });
-});
+// exports.onPrefNameUpdate = functions.database.ref("/userData/{userUid}/displayName")
+//     .onUpdate(event => {
+//
+//         let newMyName = event.data.val();
+//         let myUid = event.params.userUid;
+//         let rootRef = event.data.ref.root;
+//
+//         return rootRef.child("friend").child(myUid)
+//             .once("value")
+//             .then(function(snapshot){
+//
+//                 snapshot.forEach(function(child) {
+//                     if(child.key !== DEFAULT){
+//                         event.data.ref.root
+//                             .child("friend").child(child.key).child(myUid).child("name")
+//                             .set(event.data.val());
+//                     }
+//                 });
+//
+//                 event.data.ref.parent.child("group")
+//                     .once("value")
+//                     .then(function(snapshot){
+//                         snapshot.forEach(function (child) {
+//                             const groupKey = child.key;
+//                             if(groupKey !== DEFAULT){
+//                                 //groupKey基づいて、各groupNodeを見ていく
+//                                 rootRef.child("group").child(groupKey)
+//                                     .once("value")
+//                                     .then(function(snapShotGroup){
+//                                         if(snapShotGroup.hasChild("contents")){
+//                                             snapShotGroup.child("contents").forEach(function (snapContents) {
+//                                                 if(snapContents.child("type").val() === "data"){
+//                                                     const string = newMyName + "さんの記録";
+//                                                     snapContents.child("contentName").ref.set(string);
+//                                                 }
+//                                             });
+//                                         }
+//
+//                                         if(snapShotGroup.hasChild("member")){
+//                                             snapShotGroup.child("member").forEach(function (snapMember) {
+//                                                 if(snapMember.key === myUid){
+//                                                     snapMember.child("name").ref.set(newMyName);
+//                                                 }
+//                                             })
+//                                         }
+//                                     });
+//                             }
+//                         });
+//                     });
+//             });
+// });
 
 /**
  * プロフィールのphotoUrlアップデート時に発火。
@@ -292,60 +292,60 @@ exports.onPrefNameUpdate = functions.database.ref("/userData/{userUid}/displayNa
  * 2.自分が参加しているグループを検索→メンバーノードを上書き
  * todo 未デバッグ
  */
-exports.onPrefPhotoUrlUpdate = functions.database.ref("/userData/{userUid}/photoUrl")
-    .onUpdate(event => {
-
-    let newMyPhotoUrl = event.data.val();
-    let myUid = event.params.userUid;
-    let rootRef = event.data.ref.root;
-
-    return rootRef.child("friend").child(myUid).once("value")
-        .then(function(snapshot){
-
-            let updates = {};
-            snapshot.forEach(function(child) {
-                if(child.key !== DEFAULT)
-                    return;
-
-                updates[scheme('friend', child.key, myUid, 'photoUrl')] = newMyPhotoUrl;
-                // rootRef.child("friend").child(child.key).child(myUid).child("photoUrl")
-                //     .set(event.data.val());
-            });
-
-            //groupノードを丸ごと取り出し、該当するgroupに書き込んでゆく
-            return rootRef.child("group").once("value").then(function(snapshot){
-                snapshot.forEach(function (child) {
-                    let groupKey = child.key;
-                    if(groupKey === DEFAULT)
-                        return;
-
-                    // return rootRef.child("group").child(groupKey).once("value")
-                    //     .then(function(snapShotGroup){
-                    if(!child.hasChild("member"))
-                        return;
-
-                    child.child("member").forEach(function (snapMember) {
-                        if (snapMember.key === myUid) {
-                            snapMember.child("photoUrl").ref.set(newMyPhotoUrl);
-                            updates[scheme('group', groupKey, 'member', myUid, 'photoUrl')] = newMyPhotoUrl;
-                        }
-                    });
-
-                    return rootRef.update(updates).then(() => {
-
-                    }).catch((error) => {
-                        console.log(error);
-                    });
-                        //     }
-                        // }).catch((error) => {
-                        //     console.log(error);
-                        // });
-                });
-            }).catch((error) => {
-                console.log(error);
-            });
-        });
-});
+// exports.onPrefPhotoUrlUpdate = functions.database.ref("/userData/{userUid}/photoUrl")
+//     .onUpdate(event => {
+//
+//     let newMyPhotoUrl = event.data.val();
+//     let myUid = event.params.userUid;
+//     let rootRef = event.data.ref.root;
+//
+//     return rootRef.child("friend").child(myUid).once("value")
+//         .then(function(snapshot){
+//
+//             let updates = {};
+//             snapshot.forEach(function(child) {
+//                 if(child.key !== DEFAULT)
+//                     return;
+//
+//                 updates[scheme('friend', child.key, myUid, 'photoUrl')] = newMyPhotoUrl;
+//                 // rootRef.child("friend").child(child.key).child(myUid).child("photoUrl")
+//                 //     .set(event.data.val());
+//             });
+//
+//             //groupノードを丸ごと取り出し、該当するgroupに書き込んでゆく
+//             return rootRef.child("group").once("value").then(function(snapshot){
+//                 snapshot.forEach(function (child) {
+//                     let groupKey = child.key;
+//                     if(groupKey === DEFAULT)
+//                         return;
+//
+//                     // return rootRef.child("group").child(groupKey).once("value")
+//                     //     .then(function(snapShotGroup){
+//                     if(!child.hasChild("member"))
+//                         return;
+//
+//                     child.child("member").forEach(function (snapMember) {
+//                         if (snapMember.key === myUid) {
+//                             snapMember.child("photoUrl").ref.set(newMyPhotoUrl);
+//                             updates[scheme('group', groupKey, 'member', myUid, 'photoUrl')] = newMyPhotoUrl;
+//                         }
+//                     });
+//
+//                     return rootRef.update(updates).then(() => {
+//
+//                     }).catch((error) => {
+//                         console.log(error);
+//                     });
+//                         //     }
+//                         // }).catch((error) => {
+//                         //     console.log(error);
+//                         // });
+//                 });
+//             }).catch((error) => {
+//                 console.log(error);
+//             });
+//         });
+// });
 
 /**
  * グループからメンバー退会→各userDataを更新&&体調管理を解除
@@ -573,52 +573,97 @@ exports.writeTask = functions.database.ref('writeTask/{commandId}').onCreate(eve
                 });
             }
 
-        case 'UPDATE_PROFILE_PHOTO': {
-            if (!checkHasChild(event.data, ['whose', 'newPhotoUrl'], command))
+            //todo 未デバッグ
+        case 'UPDATE_PROFILE': {
+            if (!checkHasChild(event.data, ['whose', 'newPhotoUrl', 'newUserName', 'newEmail'], command))
                 return null;
 
             let updates = {};
-            snapshot.forEach(function (child) {
-                if (child.key !== DEFAULT)
-                    return;
+            let userUid = event.data.child('whose').val();
+            let newPhotoUrl = event.data.child('newPhotoUrl').val();
+            let newUserName = event.data.child('newUserName').val();
+            let newEmail = event.data.child('newEmail').val();
 
-                updates[scheme('friend', child.key, myUid, 'photoUrl')] = newMyPhotoUrl;
-                // rootRef.child("friend").child(child.key).child(myUid).child("photoUrl")
-                //     .set(event.data.val());
-            });
+            updates[scheme('userData', userUid, 'displayName')] = newUserName;
+            updates[scheme('userData', userUid, 'photoUrl')] = newPhotoUrl;
+            updates[scheme('userData', userUid, 'newEmail')] = newEmail;
 
-            //groupノードを丸ごと取り出し、該当するgroupに書き込んでゆく
-            return rootRef.child("group").once("value").then(function (snapshot) {
-                snapshot.forEach(function (child) {
-                    let groupKey = child.key;
-                    if (groupKey === DEFAULT)
+            return rootRef.child('friend').once('value').then((snapShot) => {
+                snapShot.forEach((friendSnap) => {
+
+                    if (friendSnap.key === DEFAULT || friendSnap.key === userUid)
                         return;
 
-                    // return rootRef.child("group").child(groupKey).once("value")
-                    //     .then(function(snapShotGroup){
-                    if (!child.hasChild("member"))
-                        return;
+                    friendSnap.forEach((childSnap) => {
 
-                    child.child("member").forEach(function (snapMember) {
-                        if (snapMember.key === myUid) {
-                            snapMember.child("photoUrl").ref.set(newMyPhotoUrl);
-                            updates[scheme('group', groupKey, 'member', myUid, 'photoUrl')] = newMyPhotoUrl;
-                        }
+                        if (childSnap.key !== userUid) return;
+
+                        updates[scheme('friend', friendSnap.key, userUid, 'displayName')] = newUserName;
+                        updates[scheme('friend', friendSnap.key, userUid, 'photoUrl')] = newPhotoUrl;
+                    });
+                });
+
+                return rootRef.child('group').once('value').then((groupSnap) => {
+
+                    if (!checkHasChild(groupSnap, ['member'], command)) return;
+
+                    groupSnap.child('member').forEach((memberSnap) => {
+
+                        if (memberSnap.key !== userUid) return;
+
+                        updates[scheme('group', groupSnap.key, 'member', userUid, 'displayName')] = newUserName;
+                        updates[scheme('group', groupSnap.key, 'member', userUid, 'photoUrl')] = newPhotoUrl;
                     });
 
                     return rootRef.update(updates).then(() => {
 
                     }).catch((error) => {
                         console.log(error);
-                    });
-                    //     }
-                    // }).catch((error) => {
-                    //     console.log(error);
-                    // });
+                    })
                 });
-            }).catch((error) => {
-                console.log(error);
             });
+
+            // snapshot.forEach(function (child) {
+            //     if (child.key !== DEFAULT)
+            //         return;
+            //
+            //     updates[scheme('friend', child.key, myUid, 'photoUrl')] = newMyPhotoUrl;
+            //     // rootRef.child("friend").child(child.key).child(myUid).child("photoUrl")
+            //     //     .set(event.data.val());
+            // });
+            //
+            // //groupノードを丸ごと取り出し、該当するgroupに書き込んでゆく
+            // return rootRef.child("group").once("value").then(function (snapshot) {
+            //     snapshot.forEach(function (child) {
+            //         let groupKey = child.key;
+            //         if (groupKey === DEFAULT)
+            //             return;
+            //
+            //         // return rootRef.child("group").child(groupKey).once("value")
+            //         //     .then(function(snapShotGroup){
+            //         if (!child.hasChild("member"))
+            //             return;
+            //
+            //         child.child("member").forEach(function (snapMember) {
+            //             if (snapMember.key === myUid) {
+            //                 snapMember.child("photoUrl").ref.set(newMyPhotoUrl);
+            //                 updates[scheme('group', groupKey, 'member', myUid, 'photoUrl')] = newMyPhotoUrl;
+            //             }
+            //         });
+            //
+            //         return rootRef.update(updates).then(() => {
+            //
+            //         }).catch((error) => {
+            //             console.log(error);
+            //         });
+            //         //     }
+            //         // }).catch((error) => {
+            //         //     console.log(error);
+            //         // });
+            //     });
+            // }).catch((error) => {
+            //     console.log(error);
+            // });
         }
         default:
             console.log('!waring! invalid command: ' + command);
