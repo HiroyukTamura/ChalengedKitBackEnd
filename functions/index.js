@@ -181,19 +181,33 @@ exports.updatePhotoUrl = functions.database.ref("/group/{groupKey}/photoUrl")
 
 exports.onCreateAccount = functions.auth.user()
     .onCreate(event => {
-        const uid = event.data.uid;
-        const photoUrl = setWhenNull(event.data.photoUrl);
-        const email = setWhenNull(event.data.email);
-        const displayName = setWhenNull(event.data.displayName);
-        const date = moment().format("YYYYMMDD");
+        let uid = event.data.uid;
+        let photoUrl = setWhenNull(event.data.photoUrl);
+        let email = setWhenNull(event.data.email);
+        let displayName = setWhenNull(event.data.displayName);
+        let date = moment().format("YYYYMMDD");
 
-        //これってまとめられるんすか？
-        admin.database().ref().child("userData").child(uid).child("registeredDate").set(date);
-        admin.database().ref().child("userData").child(uid).child("template").set(DEFAULT);
-        admin.database().ref().child("userData").child(uid).child("group").child(DEFAULT).set(DEFAULT);
-        admin.database().ref().child("friend").child(uid).child(DEFAULT).child("name").set(DEFAULT);
-        admin.database().ref().child("friend").child(uid).child(DEFAULT).child("photoUrl").set(DEFAULT);
-        admin.database().ref().child("usersParam").child(uid).child(DEFAULT).set(DEFAULT);
+        //todo テンプレ整備すること
+        let updates = {};
+        updates[scheme('userData', uid, 'registeredDate')] = date;
+        updates[scheme('userData', uid, 'template')] = DEFAULT;
+        updates[scheme('userData', uid, 'group',DEFAULT)] = DEFAULT;
+        updates[scheme('friend', uid, DEFAULT, "name")] = DEFAULT;
+        updates[scheme('friend', uid, DEFAULT, "photoUrl")] = DEFAULT;
+        updates[scheme('userParam', uid, DEFAULT)] = DEFAULT;
+
+        admin.database.ref().update(updates).then(() => {
+
+        }).catch((error) => {
+            console.log(error);
+        });
+
+        // admin.database().ref().child("userData").child(uid).child("registeredDate").set(date);
+        // admin.database().ref().child("userData").child(uid).child("template").set(DEFAULT);
+        // admin.database().ref().child("userData").child(uid).child("group").child(DEFAULT).set(DEFAULT);
+        // admin.database().ref().child("friend").child(uid).child(DEFAULT).child("name").set(DEFAULT);
+        // admin.database().ref().child("friend").child(uid).child(DEFAULT).child("photoUrl").set(DEFAULT);
+        // admin.database().ref().child("userParam").child(uid).child(DEFAULT).set(DEFAULT);
 
         let records ={
             objectID: uid,
@@ -201,6 +215,7 @@ exports.onCreateAccount = functions.auth.user()
             photoUrl: photoUrl
         };
 
+        //ここ、firebaseの無料プランだとサードパーティにデータ送信できないので動作しません
         return admin.database().ref().child("userData").child(uid).set({
             photoUrl: photoUrl,
             email: email,
@@ -275,6 +290,7 @@ exports.onPrefNameUpdate = functions.database.ref("/userData/{userUid}/displayNa
  * プロフィールのphotoUrlアップデート時に発火。
  * 1.friendノードから友達のuidを検索→各友達の友人データ上書き
  * 2.自分が参加しているグループを検索→メンバーノードを上書き
+ * todo 未デバッグ
  */
 exports.onPrefPhotoUrlUpdate = functions.database.ref("/userData/{userUid}/photoUrl")
     .onUpdate(event => {
@@ -283,38 +299,51 @@ exports.onPrefPhotoUrlUpdate = functions.database.ref("/userData/{userUid}/photo
     let myUid = event.params.userUid;
     let rootRef = event.data.ref.root;
 
-    return rootRef.child("friend").child(myUid)
-        .once("value")
+    return rootRef.child("friend").child(myUid).once("value")
         .then(function(snapshot){
 
+            let updates = {};
             snapshot.forEach(function(child) {
-                if(child.key !== DEFAULT){
-                    rootRef.child("friend").child(child.key).child(myUid).child("photoUrl")
-                        .set(event.data.val());
-                }
+                if(child.key !== DEFAULT)
+                    return;
+
+                updates[scheme('friend', child.key, myUid, 'photoUrl')] = newMyPhotoUrl;
+                // rootRef.child("friend").child(child.key).child(myUid).child("photoUrl")
+                //     .set(event.data.val());
             });
 
-            event.data.ref.parent.child("group")
-                .once("value")
-                .then(function(snapshot){
-                    snapshot.forEach(function (child) {
-                        const groupKey = child.key;
-                        if(groupKey !== DEFAULT){
-                            //groupKey基づいて、各groupNodeを見ていく
-                            rootRef.child("group").child(groupKey)
-                                .once("value")
-                                .then(function(snapShotGroup){
-                                    if(snapShotGroup.hasChild("member")){
-                                        snapShotGroup.child("member").forEach(function (snapMember) {
-                                            if(snapMember.key === myUid){
-                                                snapMember.child("photoUrl").ref.set(newMyPhotoUrl);
-                                            }
-                                        })
-                                    }
-                                });
+            //groupノードを丸ごと取り出し、該当するgroupに書き込んでゆく
+            return rootRef.child("group").once("value").then(function(snapshot){
+                snapshot.forEach(function (child) {
+                    let groupKey = child.key;
+                    if(groupKey === DEFAULT)
+                        return;
+
+                    // return rootRef.child("group").child(groupKey).once("value")
+                    //     .then(function(snapShotGroup){
+                    if(!child.hasChild("member"))
+                        return;
+
+                    child.child("member").forEach(function (snapMember) {
+                        if (snapMember.key === myUid) {
+                            snapMember.child("photoUrl").ref.set(newMyPhotoUrl);
+                            updates[scheme('group', groupKey, 'member', myUid, 'photoUrl')] = newMyPhotoUrl;
                         }
                     });
+
+                    return rootRef.update(updates).then(() => {
+
+                    }).catch((error) => {
+                        console.log(error);
+                    });
+                        //     }
+                        // }).catch((error) => {
+                        //     console.log(error);
+                        // });
                 });
+            }).catch((error) => {
+                console.log(error);
+            });
         });
 });
 
@@ -433,8 +462,8 @@ exports.writeTask = functions.database.ref('writeTask/{commandId}').onCreate(eve
         case 'ADD_FRIEND':
             if (!checkHasChild(event.data, ['key', 'targetUserKey'], 'ADD_FRIEND'))
                 return null;
-            var key = event.data.child('key').val();
-            var targetUserKey = event.data.child('targetUserKey').val();
+            let key = event.data.child('key').val();
+            let targetUserKey = event.data.child('targetUserKey').val();
 
             return rootRef.child('userData').once('value').then(function (snapshot) {
                 if(!checkHasChild(snapshot, [key, targetUserKey], 'ADD_FRIEND'))
@@ -445,7 +474,7 @@ exports.writeTask = functions.database.ref('writeTask/{commandId}').onCreate(eve
                     return null;
                 }
 
-                var updates = {};
+                let updates = {};
                 updates[key +'/'+ targetUserKey +'/name'] = snapshot.child(targetUserKey).child('displayName').val();
                 updates[key +'/'+ targetUserKey +'/photoUrl'] = snapshot.child(targetUserKey).child('photoUrl').val();
                 updates[key +'/'+ targetUserKey +'/isChecked'] = false;
@@ -543,6 +572,54 @@ exports.writeTask = functions.database.ref('writeTask/{commandId}').onCreate(eve
                     });
                 });
             }
+
+        case 'UPDATE_PROFILE_PHOTO': {
+            if (!checkHasChild(event.data, ['whose', 'newPhotoUrl'], command))
+                return null;
+
+            let updates = {};
+            snapshot.forEach(function (child) {
+                if (child.key !== DEFAULT)
+                    return;
+
+                updates[scheme('friend', child.key, myUid, 'photoUrl')] = newMyPhotoUrl;
+                // rootRef.child("friend").child(child.key).child(myUid).child("photoUrl")
+                //     .set(event.data.val());
+            });
+
+            //groupノードを丸ごと取り出し、該当するgroupに書き込んでゆく
+            return rootRef.child("group").once("value").then(function (snapshot) {
+                snapshot.forEach(function (child) {
+                    let groupKey = child.key;
+                    if (groupKey === DEFAULT)
+                        return;
+
+                    // return rootRef.child("group").child(groupKey).once("value")
+                    //     .then(function(snapShotGroup){
+                    if (!child.hasChild("member"))
+                        return;
+
+                    child.child("member").forEach(function (snapMember) {
+                        if (snapMember.key === myUid) {
+                            snapMember.child("photoUrl").ref.set(newMyPhotoUrl);
+                            updates[scheme('group', groupKey, 'member', myUid, 'photoUrl')] = newMyPhotoUrl;
+                        }
+                    });
+
+                    return rootRef.update(updates).then(() => {
+
+                    }).catch((error) => {
+                        console.log(error);
+                    });
+                    //     }
+                    // }).catch((error) => {
+                    //     console.log(error);
+                    // });
+                });
+            }).catch((error) => {
+                console.log(error);
+            });
+        }
         default:
             console.log('!waring! invalid command: ' + command);
             return null;
