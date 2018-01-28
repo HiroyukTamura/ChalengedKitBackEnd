@@ -70,47 +70,44 @@ const validateFirebaseIdToken = (req, res, next) => {
 app.use(cors);
 app.use(cookieParser);
 app.use(validateFirebaseIdToken);
-app.get('/api', (req, res) => {
-    if(!req.headers.groupKey || !req.headers.contentsKey){
-        res.status(403).send('Unauthorized');
-        return;
+// app.get('/api', (req, res) => {
+//     if(!req.headers.groupKey || !req.headers.contentsKey){
+//         res.status(403).send('Unauthorized');
+//         return;
+//     }
+//
+//     const commentRef = functions.database.ref('/group/'+ req.headers.groupKey + "/contents/"+ req.headers.contentsKey + "comment");
+//
+//     commentRef.transaction(current => {
+//         if (event.data.exists() && !event.data.previous.exists()) {
+//             return (current || 0) + 1;
+//         } else if (!event.data.exists() && event.data.previous.exists()) {
+//             return (current || 0) - 1;
+//         }
+//     }).then(() => {
+//         console.log('Counter updated.');
+//     });
+//
+//     res.send("groupKey: "+ req.headers.groupKey +"contentsKey: "+ req.headers.contentsKey);
+// });
+
+app.post('/searchUser', (req, res) => {
+    console.log('こっち');
+    if(!req.body.keyword){
+        res.status(403).send('non-keyword');
+    } else {
+        console.log(req.body.keyword);
+        res.status(200).send(req.body.keyword);
     }
-
-    const commentRef = functions.database.ref('/group/'+ req.headers.groupKey + "/contents/"+ req.headers.contentsKey + "comment");
-
-    commentRef.transaction(current => {
-        if (event.data.exists() && !event.data.previous.exists()) {
-            return (current || 0) + 1;
-        } else if (!event.data.exists() && event.data.previous.exists()) {
-            return (current || 0) - 1;
-        }
-    }).then(() => {
-        console.log('Counter updated.');
-    });
-
-    res.send("groupKey: "+ req.headers.groupKey +"contentsKey: "+ req.headers.contentsKey);
 });
+
+exports.searchUser = functions.https.onRequest(app);
 
 // Create and Deploy Your First Cloud Functions
 // https://firebase.google.com/docs/functions/write-firebase-functions
 
-exports.helloWorld = functions.https.onRequest(app);
+// exports.helloWorld = functions.https.onRequest(app);
 
-// exports.writeCommand = functions.database.ref('/writeTask/{commandId}')
-//     .onWrite(event => {
-//         //削除動作であればreturn
-//         if (!event.data.exists()) {
-//             return;
-//         }
-//         //
-//         const commandVal =  event.data.child('command').val();
-//         const url = event.data.child('url').val();
-//         const writerUid = event.data.child('writerUid').val();
-//         const value = event.data.child('value').val();
-//
-//         admin.database().ref('/log').set(commandVal + url + writerUid + value);
-//         // console.log(commandVal);
-// });
 
 exports.updateGroupName = functions.database.ref('/group/{groupKey}/groupName')
     .onUpdate(event => {
