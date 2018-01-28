@@ -119,8 +119,7 @@ app.post('/searchUser', (req, res) => {
                 let user = {
                     displayName: displayName,
                     photoUrl: photoUrl,
-                    uid: childSnap.key.
-                    isFriend:
+                    uid: childSnap.key
                 };
                 result.push(user);
             });
