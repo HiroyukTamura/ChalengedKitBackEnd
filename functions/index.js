@@ -1,7 +1,7 @@
 'use strict';
 
 const functions = require('firebase-functions');
-const pw = 'ss954a0120777777';
+// const pw = 'ss954a0120777777';
 const admin = require('firebase-admin');
 admin.initializeApp(functions.config().firebase);
 const express = require('express');
@@ -10,6 +10,27 @@ const cors = require('cors')({origin: true});
 const app = express();
 const moment = require('moment');
 const DEFAULT = "DEFAULT";
+
+//algolia
+const algoliasearch = require('algoliasearch');
+const dotenv = require('dotenv');
+const ALGOLIA_APP_ID= '3NLQXPNR7M';
+const ALGOLIA_API_KEY= '0cbce220bac5fc0ad682407c2e37c300';
+const ALGOLIA_INDEX_NAME= 'uid';
+const FIREBASE_DATABASE_URL= 'https://wordsupport3.firebaseio.com/';
+
+// // load values from the .env file in this directory into process.env
+// dotenv.load();
+//
+// // configure firebase
+// firebase.initializeApp({
+//     databaseURL: process.env.FIREBASE_DATABASE_URL,
+// });
+// const database = firebase.database();
+
+// configure algolia
+const algolia = algoliasearch(ALGOLIA_APP_ID, ALGOLIA_API_KEY);
+
 
 const validateFirebaseIdToken = (req, res, next) => {
     console.log('Check if request is authorized with Firebase ID token');
@@ -133,12 +154,22 @@ exports.onCreateAccount = functions.auth.user()
         admin.database().ref().child("friend").child(uid).child(DEFAULT).child("photoUrl").set(DEFAULT);
         admin.database().ref().child("usersParam").child(uid).child(DEFAULT).set(DEFAULT);
 
-        admin.database().ref().child("userData").child(uid).set({
-            "photoUrl": photoUrl,
-            "email": email,
-            "displayName": displayName
+        let records ={
+            objectID: uid,
+            displayName: displayName,
+            photoUrl: photoUrl
+        };
+
+        return admin.database().ref().child("userData").child(uid).set({
+            photoUrl: photoUrl,
+            email: email,
+            displayName: displayName
+        }).then(() => {
+            let index = algolia.initIndex(ALGOLIA_INDEX_NAME);
+            return index.saveObject(records);
+        }).catch(error => {
+            console.log(error);
         });
-        return;
 });
 
 // "userData", user.getUid(), "displayName")
