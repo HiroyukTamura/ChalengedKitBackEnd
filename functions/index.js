@@ -678,11 +678,61 @@ exports.writeTask = functions.database.ref('writeTask/{commandId}').onCreate(eve
                console.log(error);
             });
         }
+        //todo だが、ちょっと待ってほしい。以下の実装では、documentデータの中身のユーザ名まで更新してはいない。そこを実装しないと。
+        case 'UPDATE_DISPLAY_NAME':
+            return updateDisplayName(event, rootRef, command);
         default:
             console.log('!waring! invalid command: ' + command);
             return null;
     }
 });
+
+function updateDisplayName(event, rootRef, command) {
+    if (!checkHasChild(event.data, ['whose', 'newDisplayName'], command))
+        return null;
+
+    let updates = {};
+    let userUid = event.data.child('whose').val();
+    let newUserName = event.data.child('newDisplayName').val();
+
+    updates[scheme('userData', userUid, 'displayName')] = newUserName;
+
+    return rootRef.child('friend').once('value').then((snapShot) => {
+        snapShot.forEach((friendSnap) => {
+
+            if (friendSnap.key === DEFAULT || friendSnap.key === userUid)
+                return;
+
+            friendSnap.forEach((childSnap) => {
+
+                if (childSnap.key !== userUid) return;
+
+                updates[scheme('friend', friendSnap.key, userUid, 'name')] = newUserName;
+            });
+        });
+
+        return rootRef.child('group').once('value').then((parentSnap) => {
+
+            parentSnap.forEach((groupSnap) => {
+
+                if (!checkHasChild(groupSnap, ['member'], command)) return;
+
+                groupSnap.child('member').forEach((memberSnap) => {
+
+                    if (memberSnap.key !== userUid) return;
+
+                    updates[scheme('group', groupSnap.key, 'member', userUid, 'name')] = newUserName;
+                });
+            });
+
+            return rootRef.update(updates).then(() => {
+                console.log('成功！　UPDATE_DISPLAY_NAME'+ scheme(userUid, newUserName));
+            }).catch((error) => {
+                console.log(error);
+            });
+        });
+    });
+}
 
 function setWhenNull(string){
     if(!string)
