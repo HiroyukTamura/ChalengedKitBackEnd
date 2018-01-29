@@ -665,6 +665,19 @@ exports.writeTask = functions.database.ref('writeTask/{commandId}').onCreate(eve
             //     console.log(error);
             // });
         }
+        case 'UPDATE_EMAIL':{
+            if (!checkHasChild(event.data, ['whose', 'newEmail'], command))
+                return null;
+
+            let userUid = event.data.child('whose').val();
+            let newEmail = event.data.child('newEmail').val();
+
+            return rootRef.child(scheme('userData', userUid, 'email')).set(newEmail).then(() => {
+                console.log('成功！　UPDATE_EMAIL');
+            }).catch((error) => {
+               console.log(error);
+            });
+        }
         default:
             console.log('!waring! invalid command: ' + command);
             return null;
