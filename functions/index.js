@@ -195,19 +195,13 @@ exports.onCreateAccount = functions.auth.user()
         updates[scheme('friend', uid, DEFAULT, "name")] = DEFAULT;
         updates[scheme('friend', uid, DEFAULT, "photoUrl")] = DEFAULT;
         updates[scheme('userParam', uid, DEFAULT)] = DEFAULT;
+        updates[scheme('combinedCalendar', uid, DEFAULT)] = DEFAULT;
 
         admin.database.ref().update(updates).then(() => {
 
         }).catch((error) => {
             console.log(error);
         });
-
-        // admin.database().ref().child("userData").child(uid).child("registeredDate").set(date);
-        // admin.database().ref().child("userData").child(uid).child("template").set(DEFAULT);
-        // admin.database().ref().child("userData").child(uid).child("group").child(DEFAULT).set(DEFAULT);
-        // admin.database().ref().child("friend").child(uid).child(DEFAULT).child("name").set(DEFAULT);
-        // admin.database().ref().child("friend").child(uid).child(DEFAULT).child("photoUrl").set(DEFAULT);
-        // admin.database().ref().child("userParam").child(uid).child(DEFAULT).set(DEFAULT);
 
         let records ={
             objectID: uid,
@@ -443,6 +437,52 @@ exports.onDeleteSchedule = functions.database.ref('/calendar/{groupKey}/{ym}/{d}
         }).catch((error) => {
             console.log(error);
         });
+    });
+});
+
+//todo デバッグ
+exports.onCreateUsersParam = functions.database.ref('/usersParam/{uid}/{ymd}').onCreate(event => {
+    let uid = event.params.uid;
+    let ymd = event.params.ymd;
+    let createdMoment = moment(ymd, 'YYYYMMDD');
+    let ym = createdMoment.format('YYYYMM');
+
+    event.data.ref.parent().once('value').then(snapshot => {
+
+        let mounthlyCount = 0;
+        let weeklyCount = {};
+
+        snapshot.forEach(childSnap => {
+
+            if (childSnap.key === DEFAULT) return;
+
+            let recordedMoment = moment(childSnap.key, 'YYYYMMDD');
+            if (ym === recordedMoment.format('YYYYMM'))
+                mounthlyCount++;
+
+            if (recordedMoment.isoWeek() === createdMoment.isoWeek()) {
+                let sundayYmd = recordedMoment.clone().startOf('isoWeek').format('YYYYMMDD');
+                if (weeklyCount[sundayYmd])
+                    weeklyCount[sundayYmd]++;
+                else
+                    weeklyCount[sundayYmd] = 1;
+            }
+        });
+
+        let updates = {};
+        let rootScheme = scheme('userData2nd', uid, 'recordCountMon', ym);
+        let weekScheme = scheme('userData2nd', uid, 'recordCountWeek');
+        updates[rootScheme] = mounthlyCount;
+
+        for (let keyYmd in weeklyCount)
+            if(weeklyCount.hasOwnProperty(keyYmd))
+                updates[scheme(weekScheme, keyYmd)] = weeklyCount[keyYmd];
+
+        event.data.ref.root.update(updates).then(() => {
+            console.log('onCreateUsersParam 成功');
+        }).catch(error => {
+            console.log(error);
+        })
     });
 });
 
