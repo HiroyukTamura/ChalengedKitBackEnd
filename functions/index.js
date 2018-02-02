@@ -390,6 +390,62 @@ exports.onGroupMemberDiscourage = functions.database.ref("/group/{groupKey}/memb
         });
 });
 
+exports.onUpdateSchedule = functions.database.ref('/calendar/{groupKey}/{ym}/{d}/{scheduleKey}').onWrite(event => {
+    let rootRef = event.data.ref.root;
+    let groupKey = event.params.groupKey;
+    let ym = event.params.ym;
+    let date = event.params.d;
+    let scheduleKey = event.params.scheduleKey;
+    let updates = {};
+
+    if (!checkHasChild(event.data, ['colorNum', 'title'], 'onDeleteイベント回避用です'))
+        return null;//ここでreturnすることで、onDelete()のイベントを踏まなくて済む。
+
+    return rootRef.child(scheme('group', groupKey, 'member')).once('value').then((snapshot) => {
+        snapshot.forEach((memberSnap) => {
+
+            if (memberSnap.key === DEFAULT) return;
+
+            let memberKey = memberSnap.key;
+            let rootScheme = scheme('combinedCalendar', memberKey, ym, groupKey, date, scheduleKey);
+            updates[scheme(rootScheme, 'colorNum')] = event.data.child('colorNum').val();
+            updates[scheme(rootScheme, 'title')] = event.data.child('title').val();
+        });
+
+        return rootRef.update(updates).then(() => {
+            console.log('onUpdateSchedule 成功');
+        }).catch((error) => {
+            console.log(error);
+        });
+    });
+});
+
+exports.onDeleteSchedule = functions.database.ref('/calendar/{groupKey}/{ym}/{d}/{scheduleKey}').onDelete(event => {
+    let rootRef = event.data.ref.root;
+    let groupKey = event.params.groupKey;
+    let ym = event.params.ym;
+    let date = event.params.d;
+    let scheduleKey = event.params.scheduleKey;
+    let updates = {};
+
+    return rootRef.child(scheme('group', groupKey, 'member')).once('value').then((snapshot) => {
+        snapshot.forEach((memberSnap) => {
+
+            if (memberSnap.key === DEFAULT) return;
+
+            let memberKey = memberSnap.key;
+            let rootScheme = scheme('combinedCalendar', memberKey, ym, groupKey, date, scheduleKey);
+            updates[rootScheme] = null;
+        });
+
+        return rootRef.update(updates).then(() => {
+            console.log('onDeleteSchedule 成功');
+        }).catch((error) => {
+            console.log(error);
+        });
+    });
+});
+
 // exports.onAddedGroup = functions.database.ref('/group/{groupKey}/member/{userUid}').onCreate(event => {
 //     let userUid = event.params.userUid;
 //     let groupKey = event.params.groupKey;
