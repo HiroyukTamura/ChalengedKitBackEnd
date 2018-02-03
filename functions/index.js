@@ -10,6 +10,7 @@ const cors = require('cors')({origin: true});
 const app = express();
 const moment = require('moment');
 const DEFAULT = "DEFAULT";
+const DELIMITER = "9mVSv";
 
 //algolia
 const algoliasearch = require('algoliasearch');
@@ -395,15 +396,21 @@ exports.onUpdateSchedule = functions.database.ref('/calendar/{groupKey}/{ym}/{d}
     if (!checkHasChild(event.data, ['colorNum', 'title'], 'onDeleteイベント回避用です'))
         return null;//ここでreturnすることで、onDelete()のイベントを踏まなくて済む。
 
-    return rootRef.child(scheme('group', groupKey, 'member')).once('value').then((snapshot) => {
-        snapshot.forEach((memberSnap) => {
+    return rootRef.child(scheme('group', groupKey)).once('value').then((snapshot) => {
+        let groupName = snapshot.child('groupName').val();
+
+        snapshot.child('member').forEach((memberSnap) => {
 
             if (memberSnap.key === DEFAULT) return;
 
             let memberKey = memberSnap.key;
-            let rootScheme = scheme('combinedCalendar', memberKey, ym, groupKey, date, scheduleKey);
+            // let rootScheme = scheme('combinedCalendar', memberKey, ym, date, groupKey, scheduleKey);
+            let rootScheme = scheme('combinedCalendar', memberKey, ym, date, scheduleKey);
             updates[scheme(rootScheme, 'colorNum')] = event.data.child('colorNum').val();
             updates[scheme(rootScheme, 'title')] = event.data.child('title').val();
+            updates[scheme(rootScheme, 'groupKey')] = groupKey;
+            updates[scheme(rootScheme, 'groupName')] = groupName;
+            // updates[scheme(rootScheme, 'scheduleKey')] = scheduleKey;
         });
 
         return rootRef.update(updates).then(() => {
@@ -428,7 +435,7 @@ exports.onDeleteSchedule = functions.database.ref('/calendar/{groupKey}/{ym}/{d}
             if (memberSnap.key === DEFAULT) return;
 
             let memberKey = memberSnap.key;
-            let rootScheme = scheme('combinedCalendar', memberKey, ym, groupKey, date, scheduleKey);
+            let rootScheme = scheme('combinedCalendar', memberKey, ym, date, scheduleKey);
             updates[rootScheme] = null;
         });
 
@@ -440,14 +447,13 @@ exports.onDeleteSchedule = functions.database.ref('/calendar/{groupKey}/{ym}/{d}
     });
 });
 
-//todo デバッグ
 exports.onCreateUsersParam = functions.database.ref('/usersParam/{uid}/{ymd}').onCreate(event => {
     let uid = event.params.uid;
     let ymd = event.params.ymd;
     let createdMoment = moment(ymd, 'YYYYMMDD');
     let ym = createdMoment.format('YYYYMM');
 
-    event.data.ref.parent().once('value').then(snapshot => {
+    return event.data.ref.parent.once('value').then(snapshot => {
 
         let mounthlyCount = 0;
         let weeklyCount = {};
@@ -470,19 +476,120 @@ exports.onCreateUsersParam = functions.database.ref('/usersParam/{uid}/{ymd}').o
         });
 
         let updates = {};
-        let rootScheme = scheme('userData2nd', uid, 'recordCountMon', ym);
-        let weekScheme = scheme('userData2nd', uid, 'recordCountWeek');
+        let rootScheme = scheme('analytics', uid, 'recordCountMon', ym);
+        let weekScheme = scheme('analytics', uid, 'recordCountWeek');
         updates[rootScheme] = mounthlyCount;
 
         for (let keyYmd in weeklyCount)
             if(weeklyCount.hasOwnProperty(keyYmd))
                 updates[scheme(weekScheme, keyYmd)] = weeklyCount[keyYmd];
 
-        event.data.ref.root.update(updates).then(() => {
+
+        return event.data.ref.root.update(updates).then(() => {
             console.log('onCreateUsersParam 成功');
         }).catch(error => {
             console.log(error);
-        })
+        });
+    });
+});
+
+exports.onUpdateUsersParam = functions.database.ref('/usersParam/{uid}/{ymd}').onUpdate(event => {
+    let uid = event.params.uid;
+    let ymd = event.params.ymd;
+    let updates = {};
+    let updatedMoment = moment(ymd, 'YYYYMMDD');
+    let ym = updatedMoment.format('YYYYMM');
+    let timeEventScheme = scheme('analytics', uid, ym, 'timeEvent');
+    let modelRagne = {
+        // date: 'YYYYMM / YYYYMMDD(sundayYmd)',
+        type: 'range/event',
+        min: 'minuteFrom 0:00',
+        diffMin: '前週/前月の時間'
+    };
+    let rangeObjects = {};
+    let eventObjects = {};
+    let paramsObjects = {};
+
+    return event.data.ref.parent.once('value').then(snapshot => {
+        snapshot.forEach(childSnap => {
+
+            if (childSnap.key === DEFAULT) return;
+
+            let recordedMoment = moment(childSnap.key, 'YYYYMMDD');
+            if (ym === recordedMoment.format('YYYYMM')) {
+                childSnap.forEach((dataSnap) => {
+                    switch (dataSnap.child('dataType').val()){
+                        case 1:
+                            let timeJson = JSON.parse(dataSnap.child('data').val());
+
+                            timeJson['eventList'].forEach(timeEve => {
+                                let minute = timeEve['cal']['hourOfDay'] * 60 + timeEve['cal']['minute'];
+                                if(Object.keys(eventObjects).indexOf(timeEve['name']) === -1) {
+                                    eventObjects[timeEve['name']] = {};
+                                    eventObjects[timeEve['name']]['min'] = minute;
+                                    eventObjects[timeEve['name']]['count'] = 1;
+                                } else {
+                                    eventObjects[timeEve['name']]['min'] += minute;
+                                    eventObjects[timeEve['name']]['count']++;
+                                }
+                            });
+
+                            timeJson['rangeList'].forEach(rangeEve => {
+                                let objName = rangeEve['start']['name']+ DELIMITER +rangeEve['end']['name'];
+                                let startMin = 60 * rangeEve['start']['cal']['hourOfDay'] + rangeEve['start']['cal']['minute'] +  24*60 * rangeEve['start']['offset'];
+                                let endMin = 60 * rangeEve['end']['cal']['hourOfDay'] + rangeEve['end']['cal']['minute'] +  24*60 * rangeEve['end']['offset'];
+
+                                if(Object.keys(rangeObjects).indexOf(objName) === -1) {
+                                    rangeObjects[objName] = {};
+                                    rangeObjects[objName]['startMin'] = startMin;
+                                    rangeObjects[objName]['endMin'] = endMin;
+                                    rangeObjects[objName]['count'] = 1;
+                                } else {
+                                    rangeObjects[objName]['startMin'] += startMin;
+                                    rangeObjects[objName]['endMin'] += endMin;
+                                    rangeObjects[objName]['count']++;
+                                }
+                            });
+                            break;
+
+                        case 3:
+                            dataSnap.child('data').forEach(itemSnap => {
+                                let splited = itemSnap.val().split(DELIMITER);
+                                let dataName = dataSnap.child('dataName').val();
+
+                                if (Object.keys(paramsObjects).indexOf(dataSnap.child('dataName').val()) === -1)
+                                    paramsObjects[dataName] = {};
+
+                                if (Object.keys(paramsObjects[dataName]).indexOf(splited[1]) === -1) {
+                                    paramsObjects[dataName][splited[1]] = {};
+                                    paramsObjects[dataName][splited[1]]['param'] = 0;
+                                    paramsObjects[dataName][splited[1]]['type'] = parseInt(splited[0]);
+                                }
+
+                                switch (splited.length) {
+                                    case 3:
+                                        if (!splited[2])
+                                            return;
+                                        paramsObjects[dataName][splited[1]]['param']++;
+                                        break;
+                                    case 4:
+                                        let fraction = splited[2] / splited[3];
+                                        paramsObjects[dataName][splited[1]]['param'] += fraction;
+                                        break;
+                                    default:
+                                        console.log('!不正な値!  '+ splited +' uid: '+ uid +'ymd: '+ ymd);
+                                        break;
+                                }
+                            });
+                            break;
+                    }
+                });
+            }
+        });
+
+        console.log(JSON.stringify(eventObjects));
+        console.log(JSON.stringify(rangeObjects));
+        console.log(JSON.stringify(paramsObjects));
     });
 });
 
