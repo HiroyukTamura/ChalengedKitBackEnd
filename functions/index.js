@@ -447,59 +447,11 @@ exports.onDeleteSchedule = functions.database.ref('/calendar/{groupKey}/{ym}/{d}
     });
 });
 
-exports.onCreateUsersParam = functions.database.ref('/usersParam/{uid}/{ymd}').onCreate(event => {
+exports.onUpdateUsersParam = functions.database.ref('/usersParam/{uid}/{ymd}').onWrite(event => {
     let uid = event.params.uid;
     let ymd = event.params.ymd;
-    let createdMoment = moment(ymd, 'YYYYMMDD');
-    let ym = createdMoment.format('YYYYMM');
-
-    return event.data.ref.parent.once('value').then(snapshot => {
-
-        let mounthlyCount = 0;
-        let weeklyCount = {};
-
-        snapshot.forEach(childSnap => {
-
-            if (childSnap.key === DEFAULT) return;
-
-            let recordedMoment = moment(childSnap.key, 'YYYYMMDD');
-            if (ym === recordedMoment.format('YYYYMM'))
-                mounthlyCount++;
-
-            if (recordedMoment.isoWeek() === createdMoment.isoWeek()) {
-                let sundayYmd = recordedMoment.clone().startOf('isoWeek').format('YYYYMMDD');
-                if (weeklyCount[sundayYmd])
-                    weeklyCount[sundayYmd]++;
-                else
-                    weeklyCount[sundayYmd] = 1;
-            }
-        });
-
-        let updates = {};
-        let rootScheme = scheme('analytics', uid, 'recordCountMon', ym);
-        let weekScheme = scheme('analytics', uid, 'recordCountWeek');
-        updates[rootScheme] = mounthlyCount;
-
-        for (let keyYmd in weeklyCount)
-            if(weeklyCount.hasOwnProperty(keyYmd))
-                updates[scheme(weekScheme, keyYmd)] = weeklyCount[keyYmd];
-
-
-        return event.data.ref.root.update(updates).then(() => {
-            console.log('onCreateUsersParam 成功');
-        }).catch(error => {
-            console.log(error);
-        });
-    });
-});
-
-exports.onUpdateUsersParam = functions.database.ref('/usersParam/{uid}/{ymd}').onUpdate(event => {
-    let uid = event.params.uid;
-    let ymd = event.params.ymd;
-    let updates = {};
     let updatedMoment = moment(ymd, 'YYYYMMDD');
     let ym = updatedMoment.format('YYYYMM');
-    let timeEventScheme = scheme('analytics', uid, ym, 'timeEvent');
     let modelRagne = {
         // date: 'YYYYMM / YYYYMMDD(sundayYmd)',
         type: 'range/event',
@@ -513,85 +465,129 @@ exports.onUpdateUsersParam = functions.database.ref('/usersParam/{uid}/{ymd}').o
     return event.data.ref.parent.once('value').then(snapshot => {
         snapshot.forEach(childSnap => {
 
-            if (childSnap.key === DEFAULT) return;
+            if (childSnap.key === DEFAULT)
+                return;
 
-            let recordedMoment = moment(childSnap.key, 'YYYYMMDD');
-            if (ym === recordedMoment.format('YYYYMM')) {
-                childSnap.forEach((dataSnap) => {
-                    switch (dataSnap.child('dataType').val()){
-                        case 1:
-                            let timeJson = JSON.parse(dataSnap.child('data').val());
+            // let recordedMoment = moment(childSnap.key, 'YYYYMMDD');
+            if (ym !== moment(childSnap.key, 'YYYYMMDD').format('YYYYMM'))
+                return;
 
-                            timeJson['eventList'].forEach(timeEve => {
-                                let minute = timeEve['cal']['hourOfDay'] * 60 + timeEve['cal']['minute'];
-                                if(Object.keys(eventObjects).indexOf(timeEve['name']) === -1) {
-                                    eventObjects[timeEve['name']] = {};
-                                    eventObjects[timeEve['name']]['min'] = minute;
-                                    eventObjects[timeEve['name']]['count'] = 1;
-                                } else {
-                                    eventObjects[timeEve['name']]['min'] += minute;
-                                    eventObjects[timeEve['name']]['count']++;
-                                }
-                            });
+            childSnap.forEach((dataSnap) => {
+                switch (dataSnap.child('dataType').val()){
 
-                            timeJson['rangeList'].forEach(rangeEve => {
-                                let objName = rangeEve['start']['name']+ DELIMITER +rangeEve['end']['name'];
-                                let startMin = 60 * rangeEve['start']['cal']['hourOfDay'] + rangeEve['start']['cal']['minute'] +  24*60 * rangeEve['start']['offset'];
-                                let endMin = 60 * rangeEve['end']['cal']['hourOfDay'] + rangeEve['end']['cal']['minute'] +  24*60 * rangeEve['end']['offset'];
+                    case 1:
+                        let timeJson = JSON.parse(dataSnap.child('data').val());
 
-                                if(Object.keys(rangeObjects).indexOf(objName) === -1) {
-                                    rangeObjects[objName] = {};
-                                    rangeObjects[objName]['startMin'] = startMin;
-                                    rangeObjects[objName]['endMin'] = endMin;
-                                    rangeObjects[objName]['count'] = 1;
-                                } else {
-                                    rangeObjects[objName]['startMin'] += startMin;
-                                    rangeObjects[objName]['endMin'] += endMin;
-                                    rangeObjects[objName]['count']++;
-                                }
-                            });
-                            break;
+                        timeJson['eventList'].forEach(timeEve => {
+                            let minute = timeEve['cal']['hourOfDay'] * 60 + timeEve['cal']['minute'];
+                            if(Object.keys(eventObjects).indexOf(timeEve['name']) === -1) {
+                                eventObjects[timeEve['name']] = {};
+                                eventObjects[timeEve['name']]['min'] = minute;
+                                eventObjects[timeEve['name']]['count'] = 1;
+                            } else {
+                                eventObjects[timeEve['name']]['min'] += minute;
+                                eventObjects[timeEve['name']]['count']++;
+                            }
+                        });
 
-                        case 3:
-                            dataSnap.child('data').forEach(itemSnap => {
-                                let splited = itemSnap.val().split(DELIMITER);
-                                let dataName = dataSnap.child('dataName').val();
+                        timeJson['rangeList'].forEach(rangeEve => {
+                            let objName = rangeEve['start']['name']+ DELIMITER +rangeEve['end']['name'];
+                            let startMin = 60 * rangeEve['start']['cal']['hourOfDay'] + rangeEve['start']['cal']['minute'] +  24*60 * rangeEve['start']['offset'];
+                            let endMin = 60 * rangeEve['end']['cal']['hourOfDay'] + rangeEve['end']['cal']['minute'] +  24*60 * rangeEve['end']['offset'];
 
-                                if (Object.keys(paramsObjects).indexOf(dataSnap.child('dataName').val()) === -1)
-                                    paramsObjects[dataName] = {};
+                            if(Object.keys(rangeObjects).indexOf(objName) === -1) {
+                                rangeObjects[objName] = {};
+                                rangeObjects[objName]['startMin'] = startMin;
+                                rangeObjects[objName]['endMin'] = endMin;
+                                rangeObjects[objName]['count'] = 1;
+                            } else {
+                                rangeObjects[objName]['startMin'] += startMin;
+                                rangeObjects[objName]['endMin'] += endMin;
+                                rangeObjects[objName]['count']++;
+                            }
+                        });
+                        break;
 
-                                if (Object.keys(paramsObjects[dataName]).indexOf(splited[1]) === -1) {
-                                    paramsObjects[dataName][splited[1]] = {};
-                                    paramsObjects[dataName][splited[1]]['param'] = 0;
-                                    paramsObjects[dataName][splited[1]]['type'] = parseInt(splited[0]);
-                                }
+                    case 3:
+                        dataSnap.child('data').forEach(itemSnap => {
+                            let splited = itemSnap.val().split(DELIMITER);
+                            let dataName = dataSnap.child('dataName').val();
 
-                                switch (splited.length) {
-                                    case 3:
-                                        if (!splited[2])
-                                            return;
-                                        paramsObjects[dataName][splited[1]]['param']++;
-                                        break;
-                                    case 4:
-                                        let fraction = splited[2] / splited[3];
-                                        paramsObjects[dataName][splited[1]]['param'] += fraction;
-                                        break;
-                                    default:
-                                        console.log('!不正な値!  '+ splited +' uid: '+ uid +'ymd: '+ ymd);
-                                        break;
-                                }
-                            });
-                            break;
-                    }
-                });
-            }
+                            if (Object.keys(paramsObjects).indexOf(dataSnap.child('dataName').val()) === -1)
+                                paramsObjects[dataName] = {};
+
+                            if (Object.keys(paramsObjects[dataName]).indexOf(splited[1]) === -1) {
+                                paramsObjects[dataName][splited[1]] = {};
+                                paramsObjects[dataName][splited[1]]['param'] = 0;
+                                paramsObjects[dataName][splited[1]]['type'] = parseInt(splited[0]);
+                            }
+
+                            switch (splited.length) {
+                                case 3:
+                                    if (!splited[2])
+                                        return;
+                                    paramsObjects[dataName][splited[1]]['param']++;
+                                    break;
+                                case 4:
+                                    let fraction = splited[2] / splited[3];
+                                    paramsObjects[dataName][splited[1]]['param'] += fraction;
+                                    break;
+                                default:
+                                    console.log('!不正な値!  '+ splited +' uid: '+ uid +'ymd: '+ ymd);
+                                    break;
+                            }
+                        });
+                        break;
+                }
+            });
         });
 
-        console.log(JSON.stringify(eventObjects));
-        console.log(JSON.stringify(rangeObjects));
-        console.log(JSON.stringify(paramsObjects));
+        let updates = {};
+        let rootScheme = scheme('analytics', uid, ym);
+        updates[scheme(rootScheme, 'timeEve')] = eventObjects;
+        updates[scheme(rootScheme, 'rangeEve')] = rangeObjects;
+        updates[scheme(rootScheme, 'params')] = paramsObjects;
+
+        setReocrdCount(snapshot, updates, ym, ymd);
+
+        event.data.ref.root.update(updates).then(() => {
+            console.log('onUpdateUsersParam() 書き込み成功！');
+        }).catch(error => {
+            console.log(error);
+        })
     });
 });
+
+function setReocrdCount(snapshot, updates, ym, ymd) {
+    let mounthlyCount = 0;
+    let weeklyCount = {};
+    let createdMoment = moment(ymd, 'YYYYMMDD');
+
+    snapshot.forEach(childSnap => {
+
+        if (childSnap.key === DEFAULT) return;
+
+        let recordedMoment = moment(childSnap.key, 'YYYYMMDD');
+        if (ym === recordedMoment.format('YYYYMM'))
+            mounthlyCount++;
+
+        if (recordedMoment.isoWeek() === createdMoment.isoWeek()) {
+            let sundayYmd = recordedMoment.clone().startOf('isoWeek').format('YYYYMMDD');
+            if (weeklyCount[sundayYmd])
+                weeklyCount[sundayYmd]++;
+            else
+                weeklyCount[sundayYmd] = 1;
+        }
+    });
+
+    let rootScheme = scheme('analytics', uid, ym, 'recordCount');
+    let weekScheme = scheme('analytics', uid, ymd, 'recordCount');
+    updates[rootScheme] = mounthlyCount;
+
+    for (let keyYmd in weeklyCount)
+        if(weeklyCount.hasOwnProperty(keyYmd))
+            updates[scheme(weekScheme, keyYmd)] = weeklyCount[keyYmd];
+}
 
 // exports.onAddedGroup = functions.database.ref('/group/{groupKey}/member/{userUid}').onCreate(event => {
 //     let userUid = event.params.userUid;
