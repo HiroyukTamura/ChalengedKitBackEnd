@@ -447,6 +447,7 @@ exports.onDeleteSchedule = functions.database.ref('/calendar/{groupKey}/{ym}/{d}
     });
 });
 
+//todo 削除時やここらへんの動作どうなるんだろうね。アカウント作成時とか。後で考えよう。
 exports.onUpdateUsersParam = functions.database.ref('/usersParam/{uid}/{ymd}').onWrite(event => {
     let uid = event.params.uid;
     let ymd = event.params.ymd;
@@ -548,7 +549,7 @@ exports.onUpdateUsersParam = functions.database.ref('/usersParam/{uid}/{ymd}').o
         updates[scheme(rootScheme, 'rangeEve')] = rangeObjects;
         updates[scheme(rootScheme, 'params')] = paramsObjects;
 
-        setReocrdCount(snapshot, updates, ym, ymd);
+        setRecordCount(snapshot, updates, uid, ym, ymd);
 
         event.data.ref.root.update(updates).then(() => {
             console.log('onUpdateUsersParam() 書き込み成功！');
@@ -558,7 +559,7 @@ exports.onUpdateUsersParam = functions.database.ref('/usersParam/{uid}/{ymd}').o
     });
 });
 
-function setReocrdCount(snapshot, updates, ym, ymd) {
+function setRecordCount(snapshot, updates, uid, ym, ymd) {
     let mounthlyCount = 0;
     let weeklyCount = {};
     let createdMoment = moment(ymd, 'YYYYMMDD');
