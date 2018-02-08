@@ -71,26 +71,6 @@ const validateFirebaseIdToken = (req, res, next) => {
 app.use(cors);
 app.use(cookieParser);
 app.use(validateFirebaseIdToken);
-// app.get('/api', (req, res) => {
-//     if(!req.headers.groupKey || !req.headers.contentsKey){
-//         res.status(403).send('Unauthorized');
-//         return;
-//     }
-//
-//     const commentRef = functions.database.ref('/group/'+ req.headers.groupKey + "/contents/"+ req.headers.contentsKey + "comment");
-//
-//     commentRef.transaction(current => {
-//         if (event.data.exists() && !event.data.previous.exists()) {
-//             return (current || 0) + 1;
-//         } else if (!event.data.exists() && event.data.previous.exists()) {
-//             return (current || 0) - 1;
-//         }
-//     }).then(() => {
-//         console.log('Counter updated.');
-//     });
-//
-//     res.send("groupKey: "+ req.headers.groupKey +"contentsKey: "+ req.headers.contentsKey);
-// });
 
 app.post('/searchUser', (req, res) => {
     const NO_RESULT = 'NO_RESULT';
@@ -708,10 +688,10 @@ exports.writeTask = functions.database.ref('writeTask/{commandId}').onCreate(eve
             if (!checkHasChild(event.data, ['whose', 'groupKey'], command))
                 return null;
 
-            var groupKeyG = event.data.child('groupKey').val();
-            var userUidG = event.data.child('whose').val();
+            let groupKeyG = event.data.child('groupKey').val();
+            let userUidG = event.data.child('whose').val();
 
-            var updatesG = {};
+            let updatesG = {};
             updatesG['group/'+ groupKeyG +'/member/'+ userUidG] = null;
             updatesG['userData/'+ userUidG + '/group/'+ groupKeyG] = null;
             return rootRef.update(updatesG).then(function () {
@@ -882,11 +862,53 @@ exports.writeTask = functions.database.ref('writeTask/{commandId}').onCreate(eve
             return updateDisplayName(event, rootRef, command);
         case 'UPDATE_PROF_PHOTO':
             return updatePhotoUrl(event, rootRef, command);
+        case 'ADD_DOC_COMMENT':
+            return addDocComment(event, command);
         default:
-            console.log('!waring! invalid command: ' + command);
+            console.warn('!waring! invalid command: ' + command);
             return null;
     }
 });
+
+/**
+ * ドキュメント追加動作 todo デバッグ
+ */
+function addDocComment(event, command) {
+    if (!checkHasChild(event.data, ['whose', 'newComment', 'groupKey', 'contentsKey'], command))
+        return null;
+
+    let userUid = event.data.child('whose').val();
+    let newComment = event.data.child('newComment').val();
+    let groupKey = event.data.child('groupKey').val();
+    let contentsKey = event.data.child('contentsKey').val();
+
+    admin.auth().getUser(userUid)
+        .then(function(userRecord) {
+            // See the UserRecord reference doc for the contents of userRecord.
+            console.log("Successfully fetched user data:", userRecord.toJSON());
+            event.data.ref.root.child(scheme('group', groupKey, 'contents', contentsKey, 'comment')).transaction(currentVal => {
+                if (currentVal) {
+                    let currentJson = JSON.parse(currentVal);
+                    let newEle = {
+                        "content": newComment,
+                        "lastEdit": moment().format('YYYYMMDD'),
+                        "user": {
+                            "isChecked": false,
+                            "name": userRecord.displayName,
+                            "photoUrl": userRecord.photoURL,
+                            "userUid": userUid
+                        }
+                    };
+                    currentJson.eleList.push(newEle);
+                    currentVal = JSON.stringify(currentJson);
+                }
+                return currentVal;
+            });
+        }).catch(function(error) {
+            console.warn(error);
+            return null;
+        });
+}
 
 //todo だが、ちょっと待ってほしい。以下の実装では、documentデータの中身のユーザ名まで更新してはいない。そこを実装しないと。
 function updateDisplayName(event, rootRef, command) {
