@@ -168,7 +168,7 @@ exports.onCreateAccount = functions.auth.user()
         let displayName = setWhenNull(event.data.displayName);
         let date = moment().format("YYYYMMDD");
 
-        //todo テンプレ整備すること
+        //todo テンプレデフォルト値はクライエント側で持つ仕様です
         let updates = {};
         updates[scheme('userData', uid, 'registeredDate')] = date;
         updates[scheme('userData', uid, 'template')] = DEFAULT;
@@ -178,7 +178,7 @@ exports.onCreateAccount = functions.auth.user()
         updates[scheme('userParam', uid, DEFAULT)] = DEFAULT;
         updates[scheme('combinedCalendar', uid, DEFAULT)] = DEFAULT;
 
-        admin.database.ref().update(updates).then(() => {
+        admin.database().ref().update(updates).then(() => {
 
         }).catch((error) => {
             console.log(error);
@@ -871,8 +871,8 @@ exports.writeTask = functions.database.ref('writeTask/{commandId}').onCreate(eve
 });
 
 /**
- * ドキュメント追加動作 todo デバッグ
- */
+ * ドキュメント追加動作
+*/
 function addDocComment(event, command) {
     if (!checkHasChild(event.data, ['whose', 'newComment', 'groupKey', 'contentsKey'], command))
         return null;
@@ -882,7 +882,7 @@ function addDocComment(event, command) {
     let groupKey = event.data.child('groupKey').val();
     let contentsKey = event.data.child('contentsKey').val();
 
-    admin.auth().getUser(userUid)
+    return admin.auth().getUser(userUid)
         .then(function(userRecord) {
             // See the UserRecord reference doc for the contents of userRecord.
             console.log("Successfully fetched user data:", userRecord.toJSON());
