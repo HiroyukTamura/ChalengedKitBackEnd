@@ -864,11 +864,34 @@ exports.writeTask = functions.database.ref('writeTask/{commandId}').onCreate(eve
             return updatePhotoUrl(event, rootRef, command);
         case 'ADD_DOC_COMMENT':
             return addDocComment(event, command);
+        case 'CREATE_ACCOUNT_FROM_WEB':
+            return createAccountFromWeb(event, command);
         default:
             console.warn('!waring! invalid command: ' + command);
             return null;
     }
 });
+
+function createAccountFromWeb(event, command){
+    if (!checkHasChild(event.data, ['email', 'password', 'displayName'], command))
+        return null;
+
+    let email = event.data.child('email').val();
+    let password = event.data.child('password').val();
+    let displayName = event.data.child('displayName').val();
+
+    admin.auth().createUser({
+        email: email,
+        password: password,
+        displayName: displayName,
+        photoURL: DEFAULT,
+    }).then(function(userRecord) {
+        // See the UserRecord reference doc for the contents of userRecord.
+        console.log("createAccountFromWeb:", userRecord.uid);
+    }).catch(function(error) {
+        console.error(error);
+    });
+}
 
 /**
  * ドキュメント追加動作
