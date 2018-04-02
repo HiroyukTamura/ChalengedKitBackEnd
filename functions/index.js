@@ -872,6 +872,11 @@ exports.writeTask = functions.database.ref('writeTask/{commandId}').onCreate(eve
     }
 });
 
+/**
+ * @see exports.onCreateAccount
+ * @param event
+ * @param command
+ */
 function createAccountFromWeb(event, command){
     if (!checkHasChild(event.data, ['email', 'password', 'displayName'], command))
         return null;
@@ -880,7 +885,7 @@ function createAccountFromWeb(event, command){
     let password = event.data.child('password').val();
     let displayName = event.data.child('displayName').val();
 
-    admin.auth().createUser({
+    return admin.auth().createUser({
         email: email,
         password: password,
         displayName: displayName,
@@ -888,8 +893,10 @@ function createAccountFromWeb(event, command){
     }).then(function(userRecord) {
         // See the UserRecord reference doc for the contents of userRecord.
         console.log("createAccountFromWeb:", userRecord.uid);
+        return userRecord.uid;
     }).catch(function(error) {
         console.error(error);
+        return null;
     });
 }
 
