@@ -172,14 +172,14 @@ exports.onCreateAccount = functions.auth.user()
         let updates = {};
         updates[scheme('userData', uid, 'registeredDate')] = date;
         updates[scheme('userData', uid, 'template')] = DEFAULT;
-        updates[scheme('userData', uid, 'group',DEFAULT)] = DEFAULT;
+        updates[scheme('userData', uid, 'group', DEFAULT)] = DEFAULT;
         updates[scheme('friend', uid, DEFAULT, "name")] = DEFAULT;
         updates[scheme('friend', uid, DEFAULT, "photoUrl")] = DEFAULT;
         updates[scheme('userParam', uid, DEFAULT)] = DEFAULT;
         updates[scheme('combinedCalendar', uid, DEFAULT)] = DEFAULT;
 
         admin.database().ref().update(updates).then(() => {
-
+            console.log('onCreateAccount() 成功!');
         }).catch((error) => {
             console.log(error);
         });
@@ -190,8 +190,8 @@ exports.onCreateAccount = functions.auth.user()
             photoUrl: photoUrl
         };
 
-        //ここ、firebaseの無料プランだとサードパーティにデータ送信できないので動作しません
-        return admin.database().ref().child("userData").child(uid).set({
+        // ここ、firebaseの無料プランだとサードパーティにデータ送信できないので動作しません
+        return admin.database().ref().child("userData").child(uid).update({
             photoUrl: photoUrl,
             email: email,
             displayName: displayName
