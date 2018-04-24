@@ -164,11 +164,11 @@ exports.searchUser = functions.https.onRequest(app);
 // });
 
 exports.onCreateAccount = functions.auth.user()
-    .onCreate(event => {
-        let uid = event.data.uid;
-        let photoUrl = setWhenNull(event.data.photoUrl);
-        let email = setWhenNull(event.data.email);
-        let displayName = setWhenNull(event.data.displayName);
+    .onCreate((userRecord, context) => {
+        let uid = userRecord.uid;
+        // let photoUrl = setWhenNull(userRecord.photoURL);
+        // let email = setWhenNull(userRecord.email);
+        // let displayName = setWhenNull(userRecord.displayName);
         let date = moment().format("YYYYMMDD");
 
         //todo テンプレデフォルト値はクライエント側で持つ仕様です
@@ -181,6 +181,7 @@ exports.onCreateAccount = functions.auth.user()
         updates[scheme('usersParam', uid, DEFAULT)] = DEFAULT;
         updates[scheme('combinedCalendar', uid, DEFAULT)] = DEFAULT;
         updates[scheme('recordMeta', uid, DEFAULT)] = DEFAULT;
+        //todo これ結構色んなメソッド発火させてない？一回デバッグすべき
 
         return admin.database().ref().update(updates).then(() => {
             console.log('onCreateAccount() 成功!');
