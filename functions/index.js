@@ -181,6 +181,8 @@ exports.onCreateAccount = functions.auth.user()
         updates[scheme('friend', uid, DEFAULT, "photoUrl")] = DEFAULT;
         updates[scheme('usersParam', uid, DEFAULT)] = DEFAULT;
         updates[scheme('combinedCalendar', uid, DEFAULT)] = DEFAULT;
+        updates[scheme('analytics', uid, DEFAULT)] = DEFAULT;
+        updates[scheme('analytics', uid, 'totalCount')] = 0;
         //todo これ結構色んなメソッド発火させてない？一回デバッグすべき
 
         return admin.database().ref().update(updates).then(() => {
@@ -438,7 +440,9 @@ exports.onCreateAccount = functions.auth.user()
 
 //todo 削除時やここらへんの動作どうなるんだろうね。アカウント作成時とか。後で考えよう。
 exports.onUpdateUsersParam = functions.database.ref('/usersParam/{uid}/{ymd}').onWrite((change, context) => {
-    let uid = context.auth.uid;
+    if (!checkHasChild(context.params, ['uid', 'ymd']))
+        return;
+    let uid = context.params.uid;
     let ymd = context.params.ymd;
     let updatedMoment = moment(ymd, 'YYYYMMDD');
     let ym = updatedMoment.format('YYYYMM');
@@ -556,10 +560,20 @@ function setRecordedDate(snapshot, updates, uid, ym, ymd) {
 
         if (childSnap.key === DEFAULT) return;
 
+        if (childSnap.key === 'totalCount') {
+            let total = childSnap.val();
+            total++;
+            let totalScheme = scheme('analytics', uid, 'totalCount');
+            updates[totalScheme] = total;
+            return;
+        }
+
+        //その月の中で、記録した日をリストにする
         let recordedMoment = moment(childSnap.key, 'YYYYMMDD');
         if (ym === recordedMoment.format('YYYYMM'))
             mounthlyDates.push(recordedMoment.date());//これは1が起数
 
+        //その週の中で、記録した回数をつける
         if (recordedMoment.isoWeek() === createdMoment.isoWeek()) {
             let sundayYmd = recordedMoment.clone().startOf('isoWeek').format('YYYYMMDD');
             if (weeklyCount[sundayYmd])
@@ -1056,7 +1070,7 @@ function setWhenNull(string){
  * @param methodName メソッド名
  */
 function checkHasChild(data, params, methodName){
-    var hasChild = true;
+    let hasChild = true;
     params.forEach(function(param){
         if (!data.hasChild(param)) {
             console.log('!WARNING!'+ param + 'がdataノードに存在していない! at ' + methodName);
