@@ -440,7 +440,7 @@ exports.onCreateAccount = functions.auth.user()
 
 //todo 削除時やここらへんの動作どうなるんだろうね。アカウント作成時とか。後で考えよう。
 exports.onUpdateUsersParam = functions.database.ref('/usersParam/{uid}/{ymd}').onWrite((change, context) => {
-    if (!checkHasParams(context.params, 'uid', 'ymd'))
+    if (!checkHasParams(context.params, 'uid', 'ymd'))//アカウント作成時のDEFAULT書き込みで、これがないと走ってしまうんだ。
         return;
 
     let uid = context.params.uid;
@@ -562,13 +562,29 @@ function setRecordedDate(snapshot, updates, uid, ym, ymd) {
     let createdMoment = moment(ymd, 'YYYYMMDD');
 
     let totalCount = 0;
+    let contMoments = [];//暫定
+    let contMomentsMax = [];//最長
     snapshot.forEach(childSnap => {
 
         if (childSnap.key === DEFAULT)
             return;
 
-        //その月の中で、記録した日をリストにする
+        //暫定の最後尾と当該日時が連続するならば当該日時を連続日リストに加え、もし最長より暫定が長いようであれば暫定を最長に反映させる。
         let recordedMoment = moment(childSnap.key, 'YYYYMMDD');
+        if (contMoments.length === 0) {
+            contMoments = [recordedMoment];
+            contMomentsMax = contMoments.concat();
+        } else {
+            let lastMoment = contMoments[contMoments.length-1];
+            if (recordedMoment.diff(lastMoment, 'days') === 1) {
+                contMoments.push(recordedMoment);
+                if (contMoments.length > contMomentsMax.length)
+                    contMomentsMax = contMoments.concat();
+            } else
+                contMoments = [recordedMoment];//連続しないようなので暫定をリセットする
+        }
+
+        //その月の中で、記録した日をリストにする
         if (ym === recordedMoment.format('YYYYMM'))
             mounthlyDates.push(recordedMoment.date());//これは1が起数
 
@@ -594,6 +610,9 @@ function setRecordedDate(snapshot, updates, uid, ym, ymd) {
 
     const totalScheme = scheme('analytics', uid, 'totalCount');
     updates[totalScheme] = totalCount;
+
+    const contScheme = scheme('analytics', uid, 'continuousCount');
+    updates[contScheme] = contMomentsMax.length;
 }
 
 // exports.onAddedGroup = functions.database.ref('/group/{groupKey}/member/{userUid}').onCreate(event => {
