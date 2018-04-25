@@ -440,8 +440,9 @@ exports.onCreateAccount = functions.auth.user()
 
 //todo 削除時やここらへんの動作どうなるんだろうね。アカウント作成時とか。後で考えよう。
 exports.onUpdateUsersParam = functions.database.ref('/usersParam/{uid}/{ymd}').onWrite((change, context) => {
-    if (!checkHasChild(context.params, ['uid', 'ymd']))
+    if (!checkHasParams(context.params, 'uid', 'ymd'))
         return;
+
     let uid = context.params.uid;
     let ymd = context.params.ymd;
     let updatedMoment = moment(ymd, 'YYYYMMDD');
@@ -551,22 +552,20 @@ exports.onUpdateUsersParam = functions.database.ref('/usersParam/{uid}/{ymd}').o
     });
 });
 
+/**
+ *
+ * @param snapshot usersParamsノードの子孫
+ */
 function setRecordedDate(snapshot, updates, uid, ym, ymd) {
     let mounthlyDates = [];
     let weeklyCount = {};
     let createdMoment = moment(ymd, 'YYYYMMDD');
 
+    let totalCount = 0;
     snapshot.forEach(childSnap => {
 
-        if (childSnap.key === DEFAULT) return;
-
-        if (childSnap.key === 'totalCount') {
-            let total = childSnap.val();
-            total++;
-            let totalScheme = scheme('analytics', uid, 'totalCount');
-            updates[totalScheme] = total;
+        if (childSnap.key === DEFAULT)
             return;
-        }
 
         //その月の中で、記録した日をリストにする
         let recordedMoment = moment(childSnap.key, 'YYYYMMDD');
@@ -581,15 +580,20 @@ function setRecordedDate(snapshot, updates, uid, ym, ymd) {
             else
                 weeklyCount[sundayYmd] = 1;
         }
+
+        totalCount++;
     });
 
-    let monthScheme = scheme('analytics', uid, ym, 'recordedDate');
-    let weekScheme = scheme('analytics', uid, ymd, 'recordCount');
+    const monthScheme = scheme('analytics', uid, ym, 'recordedDate');
     updates[monthScheme] = mounthlyDates.join(NUMARIC_DELIMITER);
 
+    const weekScheme = scheme('analytics', uid, ymd, 'recordCount');
     for (let keyYmd in weeklyCount)
         if(weeklyCount.hasOwnProperty(keyYmd))
             updates[scheme(weekScheme, keyYmd)] = weeklyCount[keyYmd];
+
+    const totalScheme = scheme('analytics', uid, 'totalCount');
+    updates[totalScheme] = totalCount;
 }
 
 // exports.onAddedGroup = functions.database.ref('/group/{groupKey}/member/{userUid}').onCreate(event => {
@@ -1079,6 +1083,17 @@ function checkHasChild(data, params, methodName){
     });
 
     return hasChild;
+}
+
+function checkHasParams(params, ...nessKeys) {
+    const paramList = Object.keys(params);
+    for (let i = 0; i < nessKeys.length; i++) {
+        if (paramList.indexOf(nessKeys[i]) === -1) {
+            console.warn('params is lacked: ', 'param:', nessKeys[i]);
+            return false;
+        }
+    }
+    return true;
 }
 
 function scheme(...nodeNames) {
